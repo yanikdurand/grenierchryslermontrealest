@@ -35,17 +35,21 @@ branche avant l'import, soit changer la *Production Branch* dans
 
 ## Après le premier déploiement
 
-Deux choses à vérifier, parce qu'elles n'ont pas pu l'être depuis
-l'environnement de développement — le proxy sortant y refuse `*.supabase.co` :
+1. **La connexion fonctionne réellement.** ✅ Vérifié le 11 août 2026 à 23 h 53 :
+   première connexion du compte admin en production, mot de passe temporaire
+   remplacé dans la foulée. La chaîne navigateur → Supabase Auth → liaison
+   `auth_user_id` → permissions est donc validée de bout en bout.
 
-1. **La connexion fonctionne réellement.** Se connecter avec un des comptes,
-   changer le mot de passe, vérifier que la liste des véhicules se remplit.
-   C'est la seule étape qui n'a pas été validée bout en bout contre la vraie
-   base; tout le reste l'a été, côté interface avec les appels simulés et
-   côté base en SQL rôle par rôle.
-2. **Le masquage financier.** Se connecter avec un compte vendeur : ni prix
-   d'achat, ni profit ne doivent apparaître. Le masquage vient de Postgres, il
-   devrait suivre, mais autant le voir de ses yeux une fois.
+   C'était le seul maillon qui n'avait pas pu être testé depuis
+   l'environnement de développement, dont le proxy sortant refuse
+   `*.supabase.co`. Le reste l'avait déjà été : l'interface avec les appels
+   simulés, la base en SQL rôle par rôle.
+
+2. **Le masquage financier dans le navigateur.** Reste à voir une fois.
+   Se connecter avec un compte vendeur : ni prix d'achat, ni profit ne doivent
+   apparaître. Le masquage est appliqué par Postgres et a été vérifié compte
+   par compte en SQL (voir `authentification.md`), mais l'observer une fois à
+   l'écran ne coûte rien.
 
 ## URL de rappel Supabase
 
