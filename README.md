@@ -52,7 +52,8 @@ src/
   auth/        connexion, changement de mot de passe forcé, contexte useMoi()
   composants/  ossature de l'application
   lib/         client Supabase, types, traduction des erreurs Postgres
-  pages/       écrans métier (acquisition, inventaire, fiche véhicule)
+  pages/       écrans métier (acquisition, inventaire, fiche, feuille,
+               file du service, inspection)
 supabase/
   migrations/  correctifs appliqués à la base de production
 tests/
@@ -70,11 +71,9 @@ docs/
 | 4 — Formulaire d'acquisition | fait |
 | 6 — Gestionnaire d'inventaire | fait |
 | 5 — Feuille d'équipements | fait |
-| 2 — Écran inspection (Catherine) | à faire |
-| 3 — Écran approbation | à faire |
+| 2 — Écran inspection (Catherine) | fait |
+| 3 — Écran approbation | fait |
 | 7 — Réglages admin | à faire |
 | 8 — Tableaux de bord | à faire |
 
-Les étapes 2 et 3 demanderont d'abord un accès masqué à `v_file_service` et
-`v_inspection_statut`, aujourd'hui fermées parce qu'elles exposent les coûts
-sans masquage.
+Il reste les réglages admin (étape 7) et les tableaux de bord (étape 8).

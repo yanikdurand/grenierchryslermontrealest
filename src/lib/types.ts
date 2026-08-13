@@ -151,3 +151,70 @@ export type TypeDocument =
   | 'bilan_85_points'
   | 'vin'
   | 'autre'
+
+export type Decision = 'en_attente' | 'ne_pas_faire' | 'de_base' | 'signature' | 'garantie'
+
+export type FileService = {
+  vehicule_id: string
+  no_stock: string
+  vehicule: string | null
+  statut_vehicule: string | null
+  statut_autorisation: string | null
+  nb_lignes: number
+  nb_en_attente: number
+  base_a_faire: number
+  garantie_a_faire: number
+  signature_en_attente_vente: number
+  cout_base_a_venir: number | null
+  requiert_inspection_saaq: boolean | null
+  saaq_rdv_le: string | null
+  saaq_complete_le: string | null
+  jours_inventaire: number | null
+}
+
+export type InspectionStatut = {
+  inspection_id: string
+  vehicule_id: string
+  no_stock: string
+  nb_lignes: number
+  nb_en_attente: number
+  nb_refusees: number
+  nb_de_base: number
+  nb_signature: number
+  nb_garantie: number
+  statut_autorisation: string | null
+  cout_base_engage: number | null
+  cout_signature_engage: number | null
+  cout_base_a_venir: number | null
+  cout_signature_potentiel: number | null
+  valeur_garantie: number | null
+  cout_evite: number | null
+  cree_le: string
+}
+
+export type LigneInspection = {
+  id: string
+  no_ligne: number | null
+  description: string | null
+  code_reparation_id: number | null
+  cout: number | null
+  complete: boolean
+  complete_le: string | null
+  decision: Decision
+  decide_le: string | null
+}
+
+export type CodeReparation = {
+  id: number
+  code: string
+  description: string | null
+}
+
+export type ChangementDecision = {
+  id: string
+  inspection_ligne_id: string
+  decision_avant: string | null
+  decision_apres: string | null
+  change_le: string
+  motif: string | null
+}

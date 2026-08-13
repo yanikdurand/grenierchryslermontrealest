@@ -45,6 +45,28 @@ const PROFILS = {
              'vehicule.voir_prix_achat', 'vehicule.voir_couts', 'feuille.saisir', 'lead.voir'],
     masque: { prix_achat: 15500, profit: null, cout_base_engage: 1200, leads_total: 3 },
   },
+  directeur: {
+    utilisateur: {
+      id: 'u-steve', nom: 'Steve Costa', email: 'scosta@grenierchryslermtlest.com',
+      role: 'directeur', actif: true, auth_user_id: 'auth-steve',
+    },
+    motDePasse: 'MotDePasseSteve1',
+    droits: ['vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
+             'vehicule.voir_prix_achat', 'vehicule.voir_couts', 'vehicule.voir_profit',
+             'feuille.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer',
+             'inspection.saisir', 'inspection.approuver', 'alerte.resoudre', 'affichage.voir'],
+    masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
+  },
+  aviseur: {
+    utilisateur: {
+      id: 'u-cat', nom: 'Catherine Généreux', email: 'cgenereux@grenierchryslermtlest.com',
+      role: 'aviseur', actif: true, auth_user_id: 'auth-cat',
+    },
+    motDePasse: 'MotDePasseCat1',
+    droits: ['vehicule.voir', 'vehicule.voir_couts', 'inspection.saisir',
+             'inspection.completer', 'saaq.completer', 'alerte.resoudre'],
+    masque: { prix_achat: null, profit: null, cout_base_engage: 1200, leads_total: null },
+  },
   vendeur: {
     utilisateur: {
       id: 'u-ludo', nom: 'Ludovick Borris', email: 'lborris@grenierchryslermtlest.com',
@@ -92,6 +114,12 @@ function vehiculeDemo(profil) {
   }
 }
 
+const CODES = [
+  { id: 1, code: 'Rouge', description: 'Urgent — sécurité ou obligatoire avant vente' },
+  { id: 2, code: 'Jaune', description: 'À surveiller — recommandé' },
+  { id: 3, code: 'Vert', description: 'Optionnel / esthétique' },
+]
+
 // --- Scénario ---------------------------------------------------------------
 
 async function scenario(navigateur, cle) {
@@ -99,6 +127,14 @@ async function scenario(navigateur, cle) {
   const appels = []
   let doitChanger = true
   let vehicule = vehiculeDemo(profil)
+
+  const voitCouts = profil.droits.includes('vehicule.voir_couts')
+  let lignes = [
+    { id: 'l1', no_ligne: 1, description: 'Pneus à changer', code_reparation_id: 1,
+      cout: 800, complete: false, complete_le: null, decision: 'en_attente', decide_le: null },
+    { id: 'l2', no_ligne: 2, description: 'Pare-brise à remplacer', code_reparation_id: 2,
+      cout: 450, complete: false, complete_le: null, decision: 'en_attente', decide_le: null },
+  ]
 
   const contexte = await navigateur.newContext({ viewport: { width: 1280, height: 900 } })
   const page = await contexte.newPage()
@@ -196,6 +232,47 @@ async function scenario(navigateur, cle) {
       ]))
     }
     if (chemin === '/rest/v1/crm_lead') return route.fulfill(json([]))
+    if (chemin === '/rest/v1/code_reparation') return route.fulfill(json(CODES))
+    if (chemin === '/rest/v1/decision_historique') return route.fulfill(json([]))
+    if (chemin === '/rest/v1/inspection_ligne') {
+      if (methode === 'PATCH') {
+        const corps = JSON.parse(req.postData() || '{}')
+        const cible = new AdresseURL(req.url()).searchParams.get('id') || ''
+        const idLigne = cible.replace('eq.', '')
+        appels.push({ fonction: 'inspection_ligne', p: corps })
+        lignes = lignes.map((l) => (l.id === idLigne ? { ...l, ...corps } : l))
+        return route.fulfill(json([]))
+      }
+      if (methode === 'POST') return route.fulfill(json([], 201))
+      return route.fulfill(json(lignes))
+    }
+    if (chemin === '/rest/v1/inspection') return route.fulfill(json([], 201))
+    if (chemin === '/rest/v1/v_file_service_app') {
+      return route.fulfill(json([{
+        vehicule_id: 'veh-1', no_stock: 'A1234', vehicule: '2021 HONDA ACCORD SPORT',
+        statut_vehicule: 'PRÊT À INSPECTER', statut_autorisation: 'En attente',
+        nb_lignes: 2, nb_en_attente: 2, base_a_faire: 0, garantie_a_faire: 0,
+        signature_en_attente_vente: 0, cout_base_a_venir: voitCouts ? 800 : null,
+        requiert_inspection_saaq: true, saaq_rdv_le: null, saaq_complete_le: null,
+        jours_inventaire: 11,
+      }]))
+    }
+    if (chemin === '/rest/v1/v_inspection_statut_app') {
+      return route.fulfill(json({
+        inspection_id: 'insp-1', vehicule_id: 'veh-1', no_stock: 'A1234',
+        nb_lignes: lignes.length,
+        nb_en_attente: lignes.filter((l) => l.decision === 'en_attente').length,
+        nb_refusees: 0, nb_de_base: 0, nb_signature: 0, nb_garantie: 0,
+        statut_autorisation: 'En attente',
+        cout_base_engage: voitCouts ? 0 : null,
+        cout_signature_engage: voitCouts ? 0 : null,
+        cout_base_a_venir: voitCouts ? 800 : null,
+        cout_signature_potentiel: voitCouts ? 450 : null,
+        valeur_garantie: voitCouts ? 0 : null,
+        cout_evite: voitCouts ? 0 : null,
+        cree_le: '2026-08-12T10:00:00Z',
+      }))
+    }
 
     if (chemin.startsWith('/rest/v1/rpc/')) {
       const fonction = chemin.replace('/rest/v1/rpc/', '')
@@ -228,7 +305,9 @@ async function scenario(navigateur, cle) {
     })))
 
   const prefixe = cle === 'reception' ? 'Réception'
-    : cle === 'gestionnaire' ? 'Gestionnaire' : 'Vendeur'
+    : cle === 'gestionnaire' ? 'Gestionnaire'
+    : cle === 'aviseur' ? 'Aviseur'
+    : cle === 'directeur' ? 'Directeur' : 'Vendeur'
 
   // Connexion + changement de mot de passe forcé
   await page.goto(ADRESSE, { waitUntil: 'domcontentloaded' })
@@ -296,8 +375,10 @@ async function scenario(navigateur, cle) {
        (blocActions > 0) === peutModifier)
 
   // SAAQ : le bouton n'apparaît qu'avec `saaq.completer`
+  const attenduSaaq = profil.droits.includes('saaq.completer')
   const boutonSaaq = await page.locator('button:has-text("Marquer l’inspection SAAQ faite")').count()
-  note(`${prefixe} — bouton SAAQ masqué (droit absent)`, boutonSaaq === 0)
+  note(`${prefixe} — bouton SAAQ ${attenduSaaq ? 'présent' : 'masqué'} sur la fiche`,
+       (boutonSaaq > 0) === attenduSaaq)
 
   if (peutModifier) {
     await page.selectOption('.bloc:has-text("Actions") select', 'MÉCANIQUE INT.')
@@ -378,6 +459,61 @@ async function scenario(navigateur, cle) {
     await page.screenshot({ path: `apercu-feuille-${cle}.png`, fullPage: true })
   }
 
+  // --- Service et inspection (étapes 2 et 3) ---
+  const droitsService = ['inspection.saisir', 'inspection.approuver', 'inspection.completer']
+  const voitService = droitsService.some((d) => profil.droits.includes(d))
+  note(`${prefixe} — onglet Service ${voitService ? 'visible' : 'masqué'}`,
+       ((await page.locator('nav a:has-text("Service")').count()) === 1) === voitService)
+
+  if (voitService) {
+    await page.click('nav a:has-text("Service")')
+    await page.waitForSelector('.liste-vehicules', { timeout: 15000 })
+    note(`${prefixe} — file du service chargée`,
+         (await page.locator('.vehicule').count()) === 1)
+    note(`${prefixe} — alerte SAAQ visible dans la file`,
+         (await page.locator('.alerte.critique').count()) >= 1)
+
+    await page.locator('a:has-text("Ouvrir l’inspection")').first().click()
+    await page.waitForSelector('.lignes-inspection', { timeout: 15000 })
+    note(`${prefixe} — inspection ouverte, lignes affichées`,
+         (await page.locator('.ligne-inspection').count()) === 2)
+    note(`${prefixe} — code de réparation affiché`,
+         (await page.locator('.pastille.rouge').count()) === 1)
+
+    const texteInspection = await page.locator('.page').textContent()
+    note(`${prefixe} — totaux ${voitCouts ? 'affichés' : 'masqués'}`,
+         texteInspection.includes('Coût de base') === voitCouts)
+
+    // Décisions : réservées à `inspection.approuver`
+    const peutApprouver = profil.droits.includes('inspection.approuver')
+    note(`${prefixe} — boutons de décision ${peutApprouver ? 'présents' : 'masqués'}`,
+         ((await page.locator('.bouton-decision').count()) > 0) === peutApprouver)
+
+    if (peutApprouver) {
+      await page.locator('.ligne-inspection').first().locator('button:has-text("De base")').click()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — décision « de_base » envoyée`,
+           appels.some((a) => a.fonction === 'inspection_ligne' && a.p.decision === 'de_base'))
+      note(`${prefixe} — aucun champ d'auteur envoyé (§6.2)`,
+           !appels.some((a) => a.fonction === 'inspection_ligne'
+             && Object.keys(a.p).some((k) => k.endsWith('_par'))))
+      note(`${prefixe} — total « De base » suit la décision`,
+           (await page.locator('.page').textContent()).includes('800'))
+    }
+
+    // Saisie de lignes : réservée à `inspection.saisir`
+    const peutSaisir = profil.droits.includes('inspection.saisir')
+    note(`${prefixe} — formulaire d'ajout ${peutSaisir ? 'présent' : 'masqué'}`,
+         ((await page.locator('form.ajout-ligne').count()) > 0) === peutSaisir)
+
+    // Bouton SAAQ : réservé à `saaq.completer`
+    const peutSaaq = profil.droits.includes('saaq.completer')
+    note(`${prefixe} — bouton SAAQ ${peutSaaq ? 'présent' : 'masqué'} sur l'inspection`,
+         ((await page.locator('button:has-text("Marquer l’inspection SAAQ faite")').count()) > 0) === peutSaaq)
+
+    await page.screenshot({ path: `apercu-inspection-${cle}.png`, fullPage: true })
+  }
+
   await page.screenshot({ path: `apercu-fiche-${cle}.png`, fullPage: true })
   await contexte.close()
 }
@@ -388,6 +524,8 @@ const navigateur = await chromium.launch({ executablePath: CHROME })
 try {
   await scenario(navigateur, 'reception')
   await scenario(navigateur, 'gestionnaire')
+  await scenario(navigateur, 'aviseur')
+  await scenario(navigateur, 'directeur')
   await scenario(navigateur, 'vendeur')
 } catch (e) {
   note('Exécution du scénario', false, e.message.split('\n')[0])

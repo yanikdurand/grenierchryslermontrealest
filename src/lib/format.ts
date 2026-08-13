@@ -93,3 +93,16 @@ export function poids(octets: number | null | undefined): string {
   if (octets < 1024 * 1024) return `${Math.round(octets / 1024)} ko`
   return `${(octets / (1024 * 1024)).toFixed(1)} Mo`
 }
+
+const DECISIONS: Record<string, string> = {
+  en_attente: 'En attente',
+  ne_pas_faire: 'Ne pas faire',
+  de_base: 'De base',
+  signature: 'Signature',
+  garantie: 'Garantie',
+}
+
+export function decision(code: string | null | undefined): string {
+  if (!code) return ABSENT
+  return DECISIONS[code] ?? code
+}

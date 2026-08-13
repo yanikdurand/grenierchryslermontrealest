@@ -816,3 +816,103 @@ body {
   font-size: 0.82rem;
   line-height: 1.45;
 }
+
+/* ---------- Inspection ---------- */
+
+.lignes-inspection { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.85rem; }
+
+.ligne-inspection {
+  border: 1px solid var(--trait);
+  border-left: 4px solid var(--trait);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+}
+
+.ligne-inspection.de_base     { border-left-color: var(--marque); }
+.ligne-inspection.signature   { border-left-color: #7a4fb5; }
+.ligne-inspection.garantie    { border-left-color: var(--succes); }
+.ligne-inspection.ne_pas_faire{ border-left-color: var(--encre-douce); opacity: 0.7; }
+.ligne-inspection.en_attente  { border-left-color: var(--avertissement); }
+
+.ligne-tete {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.ligne-description { font-weight: 600; }
+.ligne-cout { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.ligne-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--encre-douce);
+}
+
+.pastille {
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #fff;
+}
+
+.pastille.rouge { background: var(--alerte); }
+.pastille.jaune { background: var(--avertissement); }
+.pastille.vert  { background: var(--succes); }
+
+.fait { color: var(--succes); font-weight: 600; }
+
+/* Cibles larges : l'approbation se fait souvent sur tablette. */
+.boutons-decision {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.bouton-decision {
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.55rem 0.9rem;
+  min-height: 2.75rem;
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--encre-douce);
+  cursor: pointer;
+}
+
+.bouton-decision:hover:not(:disabled) { border-color: var(--marque-vive); color: var(--marque); }
+.bouton-decision:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Le survol est plus spécifique que `.choisi` : sans le second sélecteur, le
+   bouton retenu perd son libellé (texte bleu marine sur fond bleu marine)
+   tant que le curseur reste dessus — et sur tablette, l'état de survol colle
+   après un toucher. */
+.bouton-decision.choisi,
+.bouton-decision.choisi:hover:not(:disabled) {
+  background: var(--marque);
+  border-color: var(--marque);
+  color: #fff;
+}
+
+.ajout-ligne {
+  border-top: 1px solid var(--trait);
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+}
+
+.ajout-ligne h3 { margin: 0 0 0.75rem; font-size: 0.95rem; }
+
+@media (max-width: 640px) {
+  .boutons-decision .bouton-decision { flex: 1 1 45%; }
+}

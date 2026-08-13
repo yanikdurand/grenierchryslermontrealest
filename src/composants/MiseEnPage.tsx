@@ -33,6 +33,12 @@ export function MiseEnPage() {
           <NavLink to="/inventaire" className={({ isActive }) => (isActive ? 'actif' : '')}>
             Inventaire
           </NavLink>
+          {(aLeDroit('inspection.saisir') || aLeDroit('inspection.approuver')
+            || aLeDroit('inspection.completer')) && (
+            <NavLink to="/service" className={({ isActive }) => (isActive ? 'actif' : '')}>
+              Service
+            </NavLink>
+          )}
         </nav>
 
         <div className="entete-utilisateur">

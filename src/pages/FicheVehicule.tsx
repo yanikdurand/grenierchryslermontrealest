@@ -317,6 +317,21 @@ export function FicheVehicule() {
         )}
       </section>
 
+      {(aLeDroit('inspection.saisir') || aLeDroit('inspection.approuver')
+        || aLeDroit('inspection.completer')) && (
+        <section className="bloc">
+          <h2>Inspection</h2>
+          <dl className="fiche-grille">
+            <Ligne etiquette="Autorisation" valeur={texte(v.statut_autorisation)} />
+          </dl>
+          <div className="vehicule-actions espace-haut">
+            <Link to={`/vehicule/${v.id}/inspection`} className="bouton-secondaire">
+              Ouvrir l’inspection
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="bloc">
         <h2>Pneus</h2>
         {pneus.length === 0 ? (
