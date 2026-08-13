@@ -39,6 +39,12 @@ export function MiseEnPage() {
               Service
             </NavLink>
           )}
+          {(aLeDroit('admin.utilisateurs') || aLeDroit('admin.permissions')
+            || aLeDroit('admin.notifications')) && (
+            <NavLink to="/reglages" className={({ isActive }) => (isActive ? 'actif' : '')}>
+              Réglages
+            </NavLink>
+          )}
         </nav>
 
         <div className="entete-utilisateur">

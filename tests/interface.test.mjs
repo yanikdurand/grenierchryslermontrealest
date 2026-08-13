@@ -45,6 +45,19 @@ const PROFILS = {
              'vehicule.voir_prix_achat', 'vehicule.voir_couts', 'feuille.saisir', 'lead.voir'],
     masque: { prix_achat: 15500, profit: null, cout_base_engage: 1200, leads_total: 3 },
   },
+  admin: {
+    utilisateur: {
+      id: 'u-yanik', nom: 'Yanik Durand', email: 'ydurand@grenierchryslermtlest.com',
+      role: 'admin', actif: true, auth_user_id: 'auth-yanik',
+    },
+    motDePasse: 'MotDePasseYanik1',
+    droits: ['admin.notifications', 'admin.permissions', 'admin.utilisateurs', 'affichage.voir',
+             'alerte.resoudre', 'feuille.saisir', 'inspection.approuver', 'inspection.completer',
+             'inspection.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer',
+             'vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
+             'vehicule.voir_couts', 'vehicule.voir_prix_achat', 'vehicule.voir_profit'],
+    masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
+  },
   directeur: {
     utilisateur: {
       id: 'u-steve', nom: 'Steve Costa', email: 'scosta@grenierchryslermtlest.com',
@@ -190,7 +203,65 @@ async function scenario(navigateur, cle) {
     if (chemin.startsWith('/auth/v1/user')) return route.fulfill(json(compteAuth()))
     if (chemin === '/auth/v1/logout') return route.fulfill({ status: 204 })
 
-    if (chemin === '/rest/v1/utilisateur') return route.fulfill(json(profil.utilisateur))
+    if (chemin === '/rest/v1/utilisateur') {
+      if (methode === 'PATCH' || methode === 'POST') {
+        appels.push({ fonction: 'utilisateur', methode, p: JSON.parse(req.postData() || '{}') })
+        return route.fulfill(json([]))
+      }
+      // `maybeSingle()` échoue si plusieurs lignes reviennent : on respecte donc
+      // le filtre `auth_user_id` du contexte, et on ne sert la liste complète
+      // qu'à l'écran de réglages.
+      const params = new AdresseURL(req.url()).searchParams
+      if (params.has('auth_user_id')) return route.fulfill(json([profil.utilisateur]))
+      return route.fulfill(json([
+        profil.utilisateur,
+        { id: 'u-sam', nom: 'SAM', email: 'slamontagne@grenierchryslermtlest.com',
+          role: 'vendeur', actif: false, auth_user_id: null },
+        { id: 'u-neuf', nom: 'Nouvelle recrue', email: 'recrue@grenierchryslermtlest.com',
+          role: 'vendeur', actif: true, auth_user_id: null },
+      ]))
+    }
+    if (chemin === '/rest/v1/permission') {
+      return route.fulfill(json([
+        { code: 'vehicule.creer', libelle: 'Créer un véhicule', categorie: 'inventaire', ordre: 1 },
+        { code: 'vehicule.voir_profit', libelle: 'Voir le profit', categorie: 'finances', ordre: 2 },
+        { code: 'inspection.approuver', libelle: 'Approuver les réparations', categorie: 'service', ordre: 3 },
+      ]))
+    }
+    if (chemin === '/rest/v1/role_permission') {
+      if (methode === 'POST' || methode === 'DELETE') {
+        appels.push({ fonction: 'role_permission', methode,
+                      p: methode === 'POST' ? JSON.parse(req.postData() || '{}') : req.url() })
+        return route.fulfill(json([]))
+      }
+      return route.fulfill(json([
+        { role: 'admin', permission_code: 'vehicule.creer' },
+        { role: 'admin', permission_code: 'vehicule.voir_profit' },
+        { role: 'admin', permission_code: 'inspection.approuver' },
+        { role: 'vendeur', permission_code: 'vehicule.creer' },
+        { role: 'aviseur', permission_code: 'inspection.approuver' },
+      ]))
+    }
+    if (chemin === '/rest/v1/utilisateur_permission') {
+      if (methode !== 'GET') {
+        appels.push({ fonction: 'utilisateur_permission', methode })
+        return route.fulfill(json([]))
+      }
+      return route.fulfill(json([]))
+    }
+    if (chemin === '/rest/v1/notification_evenement') {
+      return route.fulfill(json([{ code: 'pret_inspecter', libelle: 'Véhicule prêt à inspecter', actif: true }]))
+    }
+    if (chemin === '/rest/v1/notification_destinataire') {
+      if (methode !== 'GET') {
+        appels.push({ fonction: 'notification_destinataire', methode })
+        return route.fulfill(json([]))
+      }
+      return route.fulfill(json([
+        { id: 'd1', evenement_code: 'pret_inspecter', utilisateur_id: 'u-yanik',
+          courriel: null, actif: true },
+      ]))
+    }
     if (chemin === '/rest/v1/v_permissions_effectives') {
       return route.fulfill(json(profil.droits.map((c) => ({ permission_code: c, accorde: true }))))
     }
@@ -307,7 +378,8 @@ async function scenario(navigateur, cle) {
   const prefixe = cle === 'reception' ? 'Réception'
     : cle === 'gestionnaire' ? 'Gestionnaire'
     : cle === 'aviseur' ? 'Aviseur'
-    : cle === 'directeur' ? 'Directeur' : 'Vendeur'
+    : cle === 'directeur' ? 'Directeur'
+    : cle === 'admin' ? 'Admin' : 'Vendeur'
 
   // Connexion + changement de mot de passe forcé
   await page.goto(ADRESSE, { waitUntil: 'domcontentloaded' })
@@ -514,6 +586,52 @@ async function scenario(navigateur, cle) {
     await page.screenshot({ path: `apercu-inspection-${cle}.png`, fullPage: true })
   }
 
+  // --- Réglages (étape 7) ---
+  const droitsAdmin = ['admin.utilisateurs', 'admin.permissions', 'admin.notifications']
+  const voitReglages = droitsAdmin.some((d) => profil.droits.includes(d))
+  note(`${prefixe} — onglet Réglages ${voitReglages ? 'visible' : 'masqué'}`,
+       ((await page.locator('nav a:has-text("Réglages")').count()) === 1) === voitReglages)
+
+  if (voitReglages) {
+    await page.click('nav a:has-text("Réglages")')
+    await page.waitForSelector('.tableau', { timeout: 15000 })
+
+    note(`${prefixe} — employés listés, inactif compris`,
+         (await page.locator('.tableau tbody tr').first().count()) === 1
+         && (await page.locator('.tableau tr.inactif').count()) === 1)
+
+    note(`${prefixe} — employé sans compte de connexion signalé`,
+         (await page.locator('.message-avertissement').textContent())?.includes('Nouvelle recrue'))
+
+    // On ne doit pas pouvoir se retirer ses propres droits
+    const monRole = page.locator('.tableau tbody tr').filter({ hasText: 'Yanik Durand' })
+    note(`${prefixe} — son propre rôle est verrouillé`,
+         await monRole.locator('select').isDisabled())
+    note(`${prefixe} — sa propre désactivation est verrouillée`,
+         await monRole.locator('input[type=checkbox]').isDisabled())
+
+    // Changement de rôle d'un autre
+    const autre = page.locator('.tableau tbody tr').filter({ hasText: 'Nouvelle recrue' })
+    await autre.locator('select').selectOption('aviseur')
+    await page.waitForTimeout(900)
+    note(`${prefixe} — changement de rôle envoyé`,
+         appels.some((a) => a.fonction === 'utilisateur' && a.p.role === 'aviseur'))
+
+    // Grille des droits
+    note(`${prefixe} — grille des droits affichée`,
+         (await page.locator('.grille-droits').count()) === 1)
+    const caseVendeurProfit = page.locator('.grille-droits tbody tr')
+      .filter({ hasText: 'Voir le profit' }).locator('input[type=checkbox]').nth(1)
+    note(`${prefixe} — vendeur n'a pas « Voir le profit »`,
+         !(await caseVendeurProfit.isChecked()))
+    await caseVendeurProfit.check()
+    await page.waitForTimeout(900)
+    note(`${prefixe} — droit accordé au rôle`,
+         appels.some((a) => a.fonction === 'role_permission' && a.methode === 'POST'))
+
+    await page.screenshot({ path: `apercu-reglages-${cle}.png`, fullPage: true })
+  }
+
   await page.screenshot({ path: `apercu-fiche-${cle}.png`, fullPage: true })
   await contexte.close()
 }
@@ -526,6 +644,7 @@ try {
   await scenario(navigateur, 'gestionnaire')
   await scenario(navigateur, 'aviseur')
   await scenario(navigateur, 'directeur')
+  await scenario(navigateur, 'admin')
   await scenario(navigateur, 'vendeur')
 } catch (e) {
   note('Exécution du scénario', false, e.message.split('\n')[0])

@@ -53,7 +53,7 @@ src/
   composants/  ossature de l'application
   lib/         client Supabase, types, traduction des erreurs Postgres
   pages/       écrans métier (acquisition, inventaire, fiche, feuille,
-               file du service, inspection)
+               file du service, inspection, réglages)
 supabase/
   migrations/  correctifs appliqués à la base de production
 tests/
@@ -73,7 +73,8 @@ docs/
 | 5 — Feuille d'équipements | fait |
 | 2 — Écran inspection (Catherine) | fait |
 | 3 — Écran approbation | fait |
-| 7 — Réglages admin | à faire |
+| 7 — Réglages admin | fait |
 | 8 — Tableaux de bord | à faire |
 
-Il reste les réglages admin (étape 7) et les tableaux de bord (étape 8).
+Il reste les tableaux de bord (étape 8), à trancher entre Metabase branché sur
+Supabase et des écrans codés à la main.

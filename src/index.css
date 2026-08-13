@@ -916,3 +916,60 @@ body {
 @media (max-width: 640px) {
   .boutons-decision .bouton-decision { flex: 1 1 45%; }
 }
+
+/* ---------- Réglages ---------- */
+
+.tableau-defilant { overflow-x: auto; }
+
+.tableau {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.tableau th,
+.tableau td {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--trait);
+  vertical-align: middle;
+}
+
+.tableau thead th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--encre-douce);
+  white-space: nowrap;
+}
+
+.tableau tr.inactif { opacity: 0.55; }
+
+.tableau select { padding: 0.35rem 0.5rem; font: inherit; font-size: 0.88rem;
+  border: 1px solid var(--trait); border-radius: 6px; background: var(--surface); }
+
+.tableau input[type=checkbox] { width: 1.15rem; height: 1.15rem; accent-color: var(--marque-vive); }
+
+.discret { color: var(--encre-douce); }
+
+/* Grille des droits : la colonne des libellés reste visible au défilement. */
+.grille-droits th.colle {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 1;
+  min-width: 14rem;
+}
+
+.grille-droits .pivot { text-align: center; }
+.grille-droits .cellule-droit { text-align: center; }
+
+.droit-libelle { display: block; font-weight: 600; font-size: 0.88rem; }
+
+.droit-code {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--encre-douce);
+  font-weight: 400;
+}
