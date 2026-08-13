@@ -236,16 +236,24 @@ export function Inventaire() {
                   <p className={`alerte ${v.nb_critiques > 0 ? 'critique' : ''}`}>{v.alertes}</p>
                 )}
 
-                {v.statut === ATTENTE_RECEPTION && peutRecevoir && (
-                  <button
-                    type="button"
-                    className="bouton-secondaire"
-                    onClick={() => marquerRecu(v)}
-                    disabled={enCours === v.id}
-                  >
-                    {enCours === v.id ? 'Enregistrement…' : 'Marquer reçu'}
-                  </button>
-                )}
+                <div className="vehicule-actions">
+                  {/* La fiche est le seul endroit où l'on modifie un véhicule :
+                      elle doit s'annoncer, pas se deviner. */}
+                  <Link to={`/vehicule/${v.id}`} className="bouton-secondaire">
+                    Ouvrir la fiche
+                  </Link>
+
+                  {v.statut === ATTENTE_RECEPTION && peutRecevoir && (
+                    <button
+                      type="button"
+                      className="bouton-secondaire"
+                      onClick={() => marquerRecu(v)}
+                      disabled={enCours === v.id}
+                    >
+                      {enCours === v.id ? 'Enregistrement…' : 'Marquer reçu'}
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>

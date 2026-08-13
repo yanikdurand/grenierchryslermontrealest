@@ -244,8 +244,14 @@ async function scenario(navigateur, cle) {
   note(`${prefixe} — filtre « alerte critique »`,
        (await page.locator('.vehicule').count()) === 1)
 
+  // La fiche doit s'annoncer : le numéro de stock est un lien visible, et
+  // chaque carte porte une action explicite. Sans elle, l'écran paraît en
+  // lecture seule alors que tout se modifie dans la fiche.
+  note(`${prefixe} — action « Ouvrir la fiche » présente sur la carte`,
+       (await page.locator('.vehicule-actions a:has-text("Ouvrir la fiche")').count()) === 1)
+
   // Fiche véhicule
-  await page.locator('.lien-stock').first().click()
+  await page.locator('.vehicule-actions a:has-text("Ouvrir la fiche")').first().click()
   await page.waitForSelector('.fiche-entete', { timeout: 15000 })
   note(`${prefixe} — fiche véhicule ouverte`,
        (await page.locator('.fiche-titre').textContent())?.includes('HONDA'))

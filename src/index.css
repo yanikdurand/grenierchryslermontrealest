@@ -539,11 +539,30 @@ body {
 .resultat { margin: 0 0 0.75rem; }
 
 .lien-stock {
-  color: var(--marque);
-  text-decoration: none;
+  color: var(--marque-vive);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
 }
 
-.lien-stock:hover { text-decoration: underline; }
+.lien-stock:hover { color: var(--marque); text-decoration-thickness: 2px; }
+
+/* Les actions d'une carte, dont l'ouverture de la fiche. */
+.vehicule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.vehicule-actions .bouton-secondaire {
+  text-decoration: none;
+  display: inline-block;
+}
+
+@media (max-width: 640px) {
+  .vehicule-actions { flex-direction: column; }
+  .vehicule-actions .bouton-secondaire { text-align: center; }
+}
 
 /* ---------- Fiche véhicule ---------- */
 
