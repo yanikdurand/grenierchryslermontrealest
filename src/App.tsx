@@ -4,7 +4,8 @@ import { Connexion } from './auth/Connexion'
 import { ChangerMotDePasse } from './auth/ChangerMotDePasse'
 import { MiseEnPage } from './composants/MiseEnPage'
 import { Acquisition } from './pages/Acquisition'
-import { Vehicules } from './pages/Vehicules'
+import { Inventaire } from './pages/Inventaire'
+import { FicheVehicule } from './pages/FicheVehicule'
 
 /** Écran affiché quand un compte Auth n'a pas de ligne `utilisateur` liée. */
 function CompteNonLie() {
@@ -62,12 +63,13 @@ function Routage() {
   return (
     <Routes>
       <Route element={<MiseEnPage />}>
-        <Route path="/vehicules" element={<Vehicules />} />
+        <Route path="/inventaire" element={<Inventaire />} />
+        <Route path="/vehicule/:id" element={<FicheVehicule />} />
         <Route
           path="/acquisition"
-          element={aLeDroit('vehicule.creer') ? <Acquisition /> : <Navigate to="/vehicules" replace />}
+          element={aLeDroit('vehicule.creer') ? <Acquisition /> : <Navigate to="/inventaire" replace />}
         />
-        <Route path="*" element={<Navigate to="/vehicules" replace />} />
+        <Route path="*" element={<Navigate to="/inventaire" replace />} />
       </Route>
     </Routes>
   )

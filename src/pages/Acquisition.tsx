@@ -189,7 +189,7 @@ export function Acquisition() {
 
     const echecs = await televerser(vehiculeId as string, envois)
 
-    navigate('/vehicules', {
+    navigate('/inventaire', {
       state: {
         creation: {
           noStock: noStock.trim().toUpperCase(),

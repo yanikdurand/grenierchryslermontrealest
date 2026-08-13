@@ -1,325 +1,311 @@
 /**
- * Test de l'interface avec les appels Supabase simulés.
+ * Test de bout en bout de l'interface, avec les appels Supabase interceptés.
  *
- * Le proxy sortant de cet environnement refuse *.supabase.co (403 de
- * politique), donc le navigateur ne peut pas joindre la vraie base. On
- * intercepte les appels pour valider la logique de l'écran; le comportement
- * de la base, lui, a été vérifié séparément en SQL en simulant chaque rôle.
+ * Pourquoi simuler : le proxy sortant de l'environnement de développement
+ * refuse `*.supabase.co` (403 de politique), donc le navigateur n'y joint pas
+ * la base. Ce test valide la logique d'écran — routage, permissions, appels
+ * émis, masquage affiché. Le comportement de la base est vérifié séparément
+ * en SQL, rôle par rôle, avec de vrais jetons.
+ *
+ * Lancer : `npm run dev` dans un terminal, puis `node tests/interface.test.mjs`.
  */
 import { chromium } from 'playwright'
 import { URL as AdresseURL } from 'node:url'
 
-const URL = 'http://127.0.0.1:5173/'
-const etapes = []
-const appelsRpc = []
+const ADRESSE = 'http://127.0.0.1:5173/'
+const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
 
+const etapes = []
 function note(nom, ok, detail = '') {
   etapes.push({ nom, ok, detail })
   console.log(`${ok ? 'OK   ' : 'ECHEC'} | ${nom}${detail ? ' — ' + detail : ''}`)
 }
 
-const MOI = {
-  id: '16fe7408-f5ce-48e9-9254-7f9cc2632b27',
-  nom: 'Emily Dupont',
-  email: 'reception@grenierchryslermtlest.com',
-  role: 'receptionniste',
-  actif: true,
-  auth_user_id: 'auth-emily',
+// --- Personnes simulées -----------------------------------------------------
+
+const PROFILS = {
+  reception: {
+    utilisateur: {
+      id: 'u-emily', nom: 'Emily Dupont', email: 'reception@grenierchryslermtlest.com',
+      role: 'receptionniste', actif: true, auth_user_id: 'auth-emily',
+    },
+    motDePasse: 'MotDePasseEmily1',
+    droits: ['vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
+             'vehicule.voir_prix_achat'],
+    // Emily voit le prix d'achat mais ni le profit, ni les coûts, ni les leads.
+    masque: { prix_achat: 15500, profit: null, cout_base_engage: null, leads_total: null },
+  },
+  vendeur: {
+    utilisateur: {
+      id: 'u-ludo', nom: 'Ludovick Borris', email: 'lborris@grenierchryslermtlest.com',
+      role: 'vendeur', actif: true, auth_user_id: 'auth-ludo',
+    },
+    motDePasse: 'MotDePasseLudo1',
+    droits: ['vehicule.voir', 'affichage.voir'],
+    // Un vendeur ne voit aucun montant sensible : Postgres renvoie des null.
+    masque: { prix_achat: null, profit: null, cout_base_engage: null, leads_total: null },
+  },
 }
 
-const DROITS_RECEPTION = [
-  'vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir',
-  'vehicule.voir', 'vehicule.voir_prix_achat',
+const STATUTS = [
+  { id: 1, nom: 'ATT. RÉCEPTION', ordre: 1 },
+  { id: 2, nom: 'VÉHICULE REÇU', ordre: 2 },
+  { id: 5, nom: 'MÉCANIQUE INT.', ordre: 5 },
+  { id: 10, nom: 'DISPONIBLE', ordre: 10 },
 ]
 
-let doitChanger = true
-let vehicules = []
-
-function utilisateurAuth() {
+function vehiculeDemo(profil) {
   return {
-    id: 'auth-emily',
-    aud: 'authenticated',
-    role: 'authenticated',
-    email: MOI.email,
-    user_metadata: { nom: MOI.nom, doit_changer_mdp: doitChanger },
+    id: 'veh-1', no_stock: 'A1234', vin: '1HGCM82633A004352',
+    vehicule_titre: '2021 HONDA ACCORD SPORT', annee: 2021, marque: 'HONDA', modele: 'ACCORD',
+    trim: 'SPORT', transmission: 'AUTO', motricite: 'FWD', km: 48000,
+    couleur_exterieur: 'Noir', couleur_interieur: 'Gris',
+    statut: 'VÉHICULE REÇU', statut_ordre: 2, fournisseur: 'Encan', fournisseur_autre: null,
+    nb_clefs: 2, nb_passagers: 5, pnbv: 2100, etat_carrosserie: 'Bon', etat_pare_brise: 'Éclat',
+    rappels: null, notes: 'Deuxième jeu de pneus inclus.',
+    garantie_complete: null, garantie_motopropulseur: null, garantie_prolongee: null,
+    lien_carfax: 'https://carfax.ca/exemple', lien_existant: true,
+    lien_existant_note: 'Solde chez Desjardins',
+    requiert_inspection_saaq: true, saaq_rdv_le: null, saaq_complete_le: null,
+    date_recu: '2026-08-01', date_mise_en_service: null, jours_inventaire: 11,
+    affiche_en_ligne: false, photos_en_ligne: 0, lien_fiche_web: null, verifie_le: null,
+    prix_vente: 24995,
+    cout_carfax: null, cout_signature_engage: null, cout_base_a_venir: null,
+    cout_signature_potentiel: null, valeur_garantie: null,
+    statut_autorisation: 'En attente', feuille_pourcentage: 45,
+    feuille_complete_le: null, feuille_derniere_modif: '2026-08-10T14:00:00Z',
+    feuille_derniere_modif_par: 'Jonathan Dauphinais',
+    nb_alertes: 2, nb_critiques: 2,
+    alertes: 'Lien existant · Inspection SAAQ requise',
+    leads_30j: null, dernier_lead: null,
+    ...profil.masque,
+  }
+}
+
+// --- Scénario ---------------------------------------------------------------
+
+async function scenario(navigateur, cle) {
+  const profil = PROFILS[cle]
+  const appels = []
+  let doitChanger = true
+  let vehicule = vehiculeDemo(profil)
+
+  const contexte = await navigateur.newContext({ viewport: { width: 1280, height: 900 } })
+  const page = await contexte.newPage()
+  page.on('pageerror', (e) => console.log('ERREUR JS:', e.message))
+
+  const json = (corps, status = 200) => ({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify(corps),
+    headers: { 'access-control-allow-origin': '*', 'access-control-expose-headers': '*' },
+  })
+
+  const compteAuth = () => ({
+    id: profil.utilisateur.auth_user_id, aud: 'authenticated', role: 'authenticated',
+    email: profil.utilisateur.email,
+    user_metadata: { nom: profil.utilisateur.nom, doit_changer_mdp: doitChanger },
     app_metadata: { provider: 'email', providers: ['email'] },
     created_at: new Date().toISOString(),
-  }
-}
+  })
 
-function session() {
-  return {
-    access_token: 'jeton-simule',
-    token_type: 'bearer',
-    expires_in: 3600,
-    expires_at: Math.floor(Date.now() / 1000) + 3600,
-    refresh_token: 'refresh-simule',
-    user: utilisateurAuth(),
-  }
-}
+  await contexte.route('**/*.supabase.co/**', async (route) => {
+    const req = route.request()
+    const chemin = new AdresseURL(req.url()).pathname
+    const methode = req.method()
 
-const navigateur = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
-})
-const contexte = await navigateur.newContext({ viewport: { width: 1280, height: 900 } })
-const page = await contexte.newPage()
-page.on('pageerror', (e) => console.log('ERREUR JS:', e.message))
-
-const json = (body, status = 200) => ({
-  status,
-  contentType: 'application/json',
-  body: JSON.stringify(body),
-  headers: { 'access-control-allow-origin': '*', 'access-control-expose-headers': '*' },
-})
-
-await contexte.route('**/*.supabase.co/**', async (route) => {
-  const req = route.request()
-  const url = new AdresseURL(req.url())
-  const chemin = url.pathname
-  const methode = req.method()
-
-  if (methode === 'OPTIONS') {
-    return route.fulfill({
-      status: 204,
-      headers: {
-        'access-control-allow-origin': '*',
-        'access-control-allow-methods': '*',
-        'access-control-allow-headers': '*',
-      },
-    })
-  }
-
-  // --- Authentification ---
-  if (chemin === '/auth/v1/token') {
-    const corps = JSON.parse(req.postData() || '{}')
-    if (corps.password !== 'Grenier-B01E5-2026' && corps.password !== 'NouveauMotDePasse1') {
-      return route.fulfill(json({ error: 'invalid_grant', error_description: 'Invalid login credentials' }, 400))
+    if (methode === 'OPTIONS') {
+      return route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': '*',
+          'access-control-allow-headers': '*',
+        },
+      })
     }
-    return route.fulfill(json(session()))
-  }
-  if (chemin === '/auth/v1/user' && methode === 'PUT') {
-    const corps = JSON.parse(req.postData() || '{}')
-    if (corps.data && corps.data.doit_changer_mdp === false) doitChanger = false
-    return route.fulfill(json(utilisateurAuth()))
-  }
-  if (chemin === '/auth/v1/user') return route.fulfill(json(utilisateurAuth()))
-  if (chemin === '/auth/v1/logout') return route.fulfill({ status: 204 })
 
-  // --- Données ---
-  if (chemin === '/rest/v1/utilisateur') return route.fulfill(json(MOI))
-  if (chemin === '/rest/v1/v_permissions_effectives') {
-    return route.fulfill(json(DROITS_RECEPTION.map((c) => ({ permission_code: c, accorde: true }))))
-  }
-  if (chemin === '/rest/v1/fournisseur') {
-    return route.fulfill(json([
-      { id: 1, nom: 'Encan' },
-      { id: 2, nom: 'Échange client' },
-      { id: 3, nom: 'Autres' },
-    ]))
-  }
-  if (chemin === '/rest/v1/v_vehicule_app') return route.fulfill(json(vehicules))
-  if (chemin === '/rest/v1/document') {
-    if (methode === 'POST') return route.fulfill(json({}, 201))
-    return route.fulfill(json([{ vehicule_id: 'veh-1', type: 'facture_fournisseur' }]))
-  }
+    if (chemin === '/auth/v1/token') {
+      const corps = JSON.parse(req.postData() || '{}')
+      if (corps.password !== 'temporaire' && corps.password !== profil.motDePasse) {
+        return route.fulfill(json({ error_description: 'Invalid login credentials' }, 400))
+      }
+      return route.fulfill(json({
+        access_token: 'jeton', token_type: 'bearer', expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        refresh_token: 'refresh', user: compteAuth(),
+      }))
+    }
+    if (chemin === '/auth/v1/user' && methode === 'PUT') {
+      const corps = JSON.parse(req.postData() || '{}')
+      if (corps.data?.doit_changer_mdp === false) doitChanger = false
+      return route.fulfill(json(compteAuth()))
+    }
+    if (chemin.startsWith('/auth/v1/user')) return route.fulfill(json(compteAuth()))
+    if (chemin === '/auth/v1/logout') return route.fulfill({ status: 204 })
 
-  // --- Fonctions métier ---
-  if (chemin === '/rest/v1/rpc/creer_vehicule') {
-    const p = JSON.parse(req.postData() || '{}')
-    appelsRpc.push({ fonction: 'creer_vehicule', p })
-    vehicules = [{
-      id: 'veh-1', no_stock: p.p_no_stock, vin: p.p_vin,
-      vehicule_titre: `${p.p_annee} ${p.p_marque} ${p.p_modele}`,
-      annee: p.p_annee, marque: p.p_marque, modele: p.p_modele,
-      statut: 'ATT. RÉCEPTION', statut_ordre: 1,
-      fournisseur: p.p_fournisseur, fournisseur_autre: p.p_fournisseur_autre,
-      km: p.p_km, prix_vente: null, prix_achat: p.p_prix_achat,
-      lien_carfax: p.p_lien_carfax, lien_existant: p.p_lien_existant,
-      lien_existant_note: p.p_lien_existant_note,
-      requiert_inspection_saaq: p.p_requiert_saaq, saaq_complete_le: null,
-      date_recu: null, jours_inventaire: null,
-      nb_alertes: p.p_requiert_saaq ? 1 : 0,
-      nb_critiques: p.p_requiert_saaq ? 1 : 0,
-      alertes: p.p_requiert_saaq ? 'Inspection SAAQ requise' : null,
-    }]
-    return route.fulfill(json('veh-1'))
-  }
-  if (chemin === '/rest/v1/rpc/recevoir_vehicule') {
-    appelsRpc.push({ fonction: 'recevoir_vehicule', p: JSON.parse(req.postData() || '{}') })
-    vehicules = vehicules.map((v) => ({ ...v, statut: 'VÉHICULE REÇU', statut_ordre: 2 }))
-    return route.fulfill(json(null))
-  }
+    if (chemin === '/rest/v1/utilisateur') return route.fulfill(json(profil.utilisateur))
+    if (chemin === '/rest/v1/v_permissions_effectives') {
+      return route.fulfill(json(profil.droits.map((c) => ({ permission_code: c, accorde: true }))))
+    }
+    if (chemin === '/rest/v1/statut_vehicule') return route.fulfill(json(STATUTS))
+    if (chemin === '/rest/v1/fournisseur') {
+      return route.fulfill(json([{ id: 1, nom: 'Encan' }, { id: 2, nom: 'Échange client' }]))
+    }
+    if (chemin === '/rest/v1/v_vehicule_app') {
+      // `maybeSingle()` demande un objet, la liste attend un tableau.
+      const seul = (req.headers()['accept'] || '').includes('vnd.pgrst.object')
+      return route.fulfill(json(seul ? vehicule : [vehicule]))
+    }
+    if (chemin === '/rest/v1/v_feuille_equipements') {
+      return route.fulfill(json([
+        { equipement_id: 1, equipement: 'Caméra de recul', categorie: 'Confort', coche: true },
+        { equipement_id: 2, equipement: 'Toit ouvrant', categorie: 'Confort', coche: false },
+      ]))
+    }
+    if (chemin === '/rest/v1/vehicule_pneu') {
+      return route.fulfill(json([{
+        id: 'p1', position: 'principal', largeur: 225, ratio: 50, diametre: 17,
+        type_pneu: 'Été', roues: 'alliage',
+      }]))
+    }
+    if (chemin === '/rest/v1/document') {
+      if (methode === 'POST') return route.fulfill(json({}, 201))
+      return route.fulfill(json([{
+        id: 'd1', type: 'facture_fournisseur', chemin_storage: 'veh-1/facture.pdf',
+        nom_fichier: 'facture.pdf', ajoute_le: '2026-08-01T12:00:00Z', taille_octets: 24000,
+      }]))
+    }
+    if (chemin === '/rest/v1/prix_historique') {
+      return route.fulfill(json([{ id: 'h1', prix: 24995, change_le: '2026-08-05T10:00:00Z' }]))
+    }
+    if (chemin === '/rest/v1/vehicule_jalon') {
+      return route.fulfill(json([
+        { id: 'j1', jalon: 'achete', atteint_le: '2026-07-28T10:00:00Z' },
+        { id: 'j2', jalon: 'recu', atteint_le: '2026-08-01T09:00:00Z' },
+      ]))
+    }
+    if (chemin === '/rest/v1/crm_lead') return route.fulfill(json([]))
 
-  // --- Storage ---
-  if (chemin.startsWith('/storage/v1/object/')) {
-    return route.fulfill(json({ Key: chemin }, 200))
-  }
+    if (chemin.startsWith('/rest/v1/rpc/')) {
+      const fonction = chemin.replace('/rest/v1/rpc/', '')
+      const p = JSON.parse(req.postData() || '{}')
+      appels.push({ fonction, p })
+      if (fonction === 'changer_statut') vehicule = { ...vehicule, statut: p.p_statut }
+      if (fonction === 'completer_saaq') {
+        vehicule = { ...vehicule, saaq_complete_le: new Date().toISOString(), alertes: 'Lien existant', nb_critiques: 1 }
+      }
+      if (fonction === 'maj_prix_vente') vehicule = { ...vehicule, prix_vente: p.p_prix }
+      return route.fulfill(json(fonction === 'creer_vehicule' ? 'veh-1' : null))
+    }
 
-  return route.fulfill(json({}, 200))
-})
+    if (chemin.startsWith('/storage/v1/object/sign/')) {
+      return route.fulfill(json({ signedURL: '/storage/v1/object/signe/veh-1/facture.pdf' }))
+    }
+    if (chemin.startsWith('/storage/v1/object/')) return route.fulfill(json({ Key: chemin }))
 
-try {
-  await page.goto(URL, { waitUntil: 'domcontentloaded' })
+    return route.fulfill(json({}))
+  })
+
+  const prefixe = cle === 'reception' ? 'Réception' : 'Vendeur'
+
+  // Connexion + changement de mot de passe forcé
+  await page.goto(ADRESSE, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('h1.titre-marque', { timeout: 15000 })
-  note('Ecran de connexion affiche', true)
-
-  // Mauvais mot de passe -> message en francais
-  await page.fill('input[type=email]', MOI.email)
-  await page.fill('input[type=password]', 'mauvais')
-  await page.click('button[type=submit]')
-  await page.waitForSelector('.message-erreur', { timeout: 10000 })
-  let msg = await page.locator('.message-erreur').textContent()
-  note('Identifiants invalides traduits en francais', msg?.includes('incorrect'), msg ?? '')
-
-  // Connexion -> changement force
-  await page.fill('input[type=password]', 'Grenier-B01E5-2026')
+  await page.fill('input[type=email]', profil.utilisateur.email)
+  await page.fill('input[type=password]', 'temporaire')
   await page.click('button[type=submit]')
   await page.waitForSelector('h1:has-text("Bienvenue")', { timeout: 15000 })
-  const bienvenue = await page.locator('h1.titre-marque').textContent()
-  note('Mot de passe temporaire force le changement', bienvenue?.includes('Emily Dupont'), bienvenue ?? '')
-
-  // Confirmation differente -> refus cote client
-  await page.locator('input[type=password]').nth(0).fill('NouveauMotDePasse1')
-  await page.locator('input[type=password]').nth(1).fill('pas-pareil')
-  await page.click('button[type=submit]')
-  await page.waitForSelector('.message-erreur', { timeout: 5000 })
-  msg = await page.locator('.message-erreur').textContent()
-  note('Confirmation differente refusee', msg?.includes('identiques'), msg ?? '')
-
-  // Trop court -> refus
-  await page.locator('input[type=password]').nth(0).fill('court')
-  await page.locator('input[type=password]').nth(1).fill('court')
-  await page.click('button[type=submit]')
-  msg = await page.locator('.message-erreur').textContent()
-  note('Mot de passe trop court refuse', msg?.includes('8 caractères'), msg ?? '')
-
-  // Changement valide
-  await page.locator('input[type=password]').nth(0).fill('NouveauMotDePasse1')
-  await page.locator('input[type=password]').nth(1).fill('NouveauMotDePasse1')
+  await page.locator('input[type=password]').nth(0).fill(profil.motDePasse)
+  await page.locator('input[type=password]').nth(1).fill(profil.motDePasse)
   await page.click('button[type=submit]')
   await page.waitForSelector('.entete', { timeout: 15000 })
-  const role = await page.locator('.identite .role').textContent()
-  note('Entree dans l application avec le bon role', role?.includes('Réception'), role ?? '')
+  note(`${prefixe} — connexion et mot de passe changé`, true)
 
-  // Navigation pilotee par les permissions
-  const nbLiens = await page.locator('nav a:has-text("Nouvelle acquisition")').count()
-  note('Lien d acquisition visible (vehicule.creer accorde)', nbLiens === 1)
+  // Navigation pilotée par les permissions
+  const peutCreer = profil.droits.includes('vehicule.creer')
+  const lienAcquisition = await page.locator('nav a:has-text("Nouvelle acquisition")').count()
+  note(`${prefixe} — lien d'acquisition ${peutCreer ? 'visible' : 'masqué'}`,
+       (lienAcquisition === 1) === peutCreer)
 
-  // Formulaire
-  await page.click('nav a:has-text("Nouvelle acquisition")')
-  await page.waitForSelector('form.formulaire', { timeout: 10000 })
-  note('Bouton desactive au depart', await page.locator('button[type=submit]').isDisabled())
-  note('Champ SAAQ absent sans immatriculation',
-       (await page.locator('legend:has-text("Inspection SAAQ")').count()) === 0)
+  // Inventaire : compteurs et liste
+  await page.waitForSelector('.liste-vehicules', { timeout: 15000 })
+  const compteurs = await page.locator('.compteur .chiffre').allTextContents()
+  note(`${prefixe} — compteurs de l'inventaire`, compteurs.length === 3, compteurs.join(' / '))
 
-  // VIN invalide
-  await page.locator('.champ:has-text("VIN") input').fill('ABC')
-  await page.waitForSelector('.indice-erreur', { timeout: 5000 })
-  let indice = await page.locator('.indice-erreur').first().textContent()
-  note('VIN trop court signale', indice?.includes('17 caractères'), indice ?? '')
+  const detailsListe = await page.locator('.vehicule-details').first().textContent()
+  const prixAchatAttendu = profil.masque.prix_achat !== null
+  note(`${prefixe} — prix d'achat ${prixAchatAttendu ? 'affiché' : 'absent de la liste'}`,
+       detailsListe.includes('Prix d’achat') === prixAchatAttendu)
 
-  await page.locator('.champ:has-text("VIN") input').fill('1HGCM82633A0O4352')
-  indice = await page.locator('.indice-erreur').first().textContent()
-  note('VIN contenant un O refuse', indice?.includes('I, O ou Q'), indice ?? '')
+  // Filtre par alerte critique
+  await page.locator('.compteur.alerte').click()
+  await page.waitForTimeout(300)
+  note(`${prefixe} — filtre « alerte critique »`,
+       (await page.locator('.vehicule').count()) === 1)
 
-  // Remplissage
-  await page.locator('.champ:has-text("Numéro de stock") input').fill('ZZE2E01')
-  await page.locator('.champ:has-text("VIN") input').fill('1HGCM82633A004352')
-  await page.locator('.champ:has-text("Marque") input').fill('HONDA')
-  await page.locator('.champ:has-text("Modèle") input').fill('ACCORD')
-  await page.locator('.champ:has-text("Année") input').fill('2021')
-  await page.locator('.champ:has-text("Prix d’achat") input').fill('15500')
-  await page.locator('.champ:has-text("Lien Carfax") input').fill('https://carfax.ca/test')
-  await page.selectOption('.champ:has-text("Fournisseur") select', 'Encan')
+  // Fiche véhicule
+  await page.locator('.lien-stock').first().click()
+  await page.waitForSelector('.fiche-entete', { timeout: 15000 })
+  note(`${prefixe} — fiche véhicule ouverte`,
+       (await page.locator('.fiche-titre').textContent())?.includes('HONDA'))
 
-  note('Toujours bloque sans justificatif d achat',
-       await page.locator('button[type=submit]').isDisabled())
+  const texteFiche = await page.locator('.page').textContent()
+  note(`${prefixe} — équipement coché affiché, non coché absent`,
+       texteFiche.includes('Caméra de recul') && !texteFiche.includes('Toit ouvrant'))
+  note(`${prefixe} — pneus affichés`, texteFiche.includes('225/50 R17'))
+  note(`${prefixe} — parcours affiché`, texteFiche.includes('Acheté') && texteFiche.includes('Reçu'))
+  note(`${prefixe} — alerte de lien existant visible`, texteFiche.includes('Desjardins'))
 
-  // Justificatif
-  await page.locator('.champ:has-text("Facture du fournisseur") input[type=file]').setInputFiles({
-    name: 'facture.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n', 'utf8'),
-  })
-  await page.waitForTimeout(200)
-  note('Bouton actif une fois le justificatif joint',
-       await page.locator('button[type=submit]').isEnabled())
+  note(`${prefixe} — profit ${profil.masque.profit === null ? 'masqué' : 'affiché'}`,
+       texteFiche.includes('Profit') === (profil.masque.profit !== null))
+  note(`${prefixe} — leads ${profil.masque.leads_total === null ? 'masqués' : 'affichés'}`,
+       texteFiche.includes('30 derniers jours') === (profil.masque.leads_total !== null))
 
-  // Le libelle change pour une reprise
-  await page.selectOption('.champ:has-text("Fournisseur") select', 'Échange client')
-  await page.waitForTimeout(200)
-  note("Libelle « feuille d'évaluation » pour une reprise",
-       (await page.locator('.champ:has-text("Feuille d’évaluation"), .champ:has-text("Feuille d\'évaluation")').count()) > 0)
-  await page.selectOption('.champ:has-text("Fournisseur") select', 'Encan')
+  // Actions réservées à `vehicule.modifier`
+  const peutModifier = profil.droits.includes('vehicule.modifier')
+  const blocActions = await page.locator('.bloc:has-text("Actions")').count()
+  note(`${prefixe} — bloc d'actions ${peutModifier ? 'présent' : 'masqué'}`,
+       (blocActions > 0) === peutModifier)
 
-  // Immatriculation -> SAAQ obligatoire
-  await page.locator('.champ:has-text("Photo des immatriculations") input[type=file]').setInputFiles({
-    name: 'immat.png', mimeType: 'image/png', buffer: Buffer.from('89504e470d0a1a0a', 'hex'),
-  })
-  await page.waitForSelector('legend:has-text("Inspection SAAQ")', { timeout: 5000 })
-  note('Champ SAAQ apparait avec l immatriculation', true)
-  note('Bouton rebloque tant que SAAQ est sans reponse',
-       await page.locator('button[type=submit]').isDisabled())
+  // SAAQ : le bouton n'apparaît qu'avec `saaq.completer`
+  const boutonSaaq = await page.locator('button:has-text("Marquer l’inspection SAAQ faite")').count()
+  note(`${prefixe} — bouton SAAQ masqué (droit absent)`, boutonSaaq === 0)
 
-  await page.locator('.radio:has-text("Oui") input').check()
-  await page.waitForTimeout(200)
-  note('Avertissement d alerte critique SAAQ affiche',
-       (await page.locator('.note-alerte:has-text("alerte critique")').count()) > 0)
+  if (peutModifier) {
+    await page.selectOption('.bloc:has-text("Actions") select', 'MÉCANIQUE INT.')
+    await page.locator('button:has-text("Changer le statut")').click()
+    await page.waitForTimeout(1200)
+    note(`${prefixe} — changer_statut appelé`,
+         appels.some((a) => a.fonction === 'changer_statut' && a.p.p_statut === 'MÉCANIQUE INT.'))
+    note(`${prefixe} — statut rafraîchi à l'écran`,
+         (await page.locator('.statut.gros').textContent())?.includes('MÉCANIQUE'))
 
-  // Lien existant
-  await page.locator('.case:has-text("solde reste dû") input').check()
-  await page.waitForTimeout(200)
-  note('Avertissement affiche pour un lien existant',
-       (await page.locator('.note-alerte').count()) >= 2)
+    await page.locator('.bloc:has-text("Actions") input[type=number]').fill('23495')
+    await page.locator('button:has-text("Enregistrer le prix")').click()
+    await page.waitForTimeout(1200)
+    note(`${prefixe} — maj_prix_vente appelé`,
+         appels.some((a) => a.fonction === 'maj_prix_vente' && a.p.p_prix === 23495))
+  }
 
-  note('Bouton actif, formulaire complet', await page.locator('button[type=submit]').isEnabled())
+  await page.screenshot({ path: `apercu-fiche-${cle}.png`, fullPage: true })
+  await contexte.close()
+}
 
-  // Soumission
-  await page.click('button[type=submit]')
-  await page.waitForSelector('.bandeau-succes', { timeout: 20000 })
-  const succes = await page.locator('.bandeau-succes').textContent()
-  note('Bandeau de succes affiche', succes?.includes('ZZE2E01'), succes?.replace(/\s+/g, ' ').slice(0, 90) ?? '')
+// --- Exécution --------------------------------------------------------------
 
-  // Verification de la charge utile envoyee a creer_vehicule
-  const appel = appelsRpc.find((a) => a.fonction === 'creer_vehicule')
-  note('creer_vehicule appele (pas d insertion directe)', Boolean(appel))
-  note('VIN normalise en majuscules', appel?.p.p_vin === '1HGCM82633A004352', appel?.p.p_vin)
-  note('requiert_saaq transmis a vrai', appel?.p.p_requiert_saaq === true)
-  note('lien_existant transmis a vrai', appel?.p.p_lien_existant === true)
-  note('Aucun champ d auteur envoye (§6.2)',
-       !Object.keys(appel?.p ?? {}).some((k) => /cree_par|_par$/.test(k)),
-       Object.keys(appel?.p ?? {}).filter((k) => /_par/.test(k)).join(',') || 'aucun')
-
-  // Liste
-  await page.waitForSelector('.vehicule:has-text("ZZE2E01")', { timeout: 10000 })
-  const carte = page.locator('.vehicule:has-text("ZZE2E01")')
-  note('Statut ATT. RÉCEPTION', (await carte.locator('.statut').textContent())?.includes('ATT'))
-  note('Alerte SAAQ visible',
-       (await carte.locator('.alerte.critique').allTextContents()).join(' ').includes('SAAQ'))
-  const details = await carte.locator('.vehicule-details').textContent()
-  note('Prix d achat affiche a la reception', details?.includes('15'), details?.replace(/\s+/g, ' ').trim())
-
-  // Marquer reçu
-  await carte.locator('button:has-text("Marquer reçu")').click()
-  await page.waitForTimeout(1200)
-  note('recevoir_vehicule appele',
-       appelsRpc.some((a) => a.fonction === 'recevoir_vehicule'))
-  await page.locator('.case:has-text("En attente de réception") input').uncheck()
-  await page.waitForTimeout(400)
-  const statutApres = await page.locator('.vehicule:has-text("ZZE2E01") .statut').first().textContent()
-  note('Statut passe a VÉHICULE REÇU', statutApres?.includes('REÇU'), statutApres ?? '')
-
-  await page.screenshot({ path: 'apercu-liste.png' })
-  await page.click('nav a:has-text("Nouvelle acquisition")')
-  await page.waitForSelector('form.formulaire')
-  await page.screenshot({ path: 'apercu-formulaire.png', fullPage: true })
+const navigateur = await chromium.launch({ executablePath: CHROME })
+try {
+  await scenario(navigateur, 'reception')
+  await scenario(navigateur, 'vendeur')
 } catch (e) {
-  note('Execution du scenario', false, e.message.split('\n')[0])
-  await page.screenshot({ path: 'echec.png', fullPage: true })
+  note('Exécution du scénario', false, e.message.split('\n')[0])
 } finally {
   await navigateur.close()
 }
 
 const echecs = etapes.filter((e) => !e.ok)
-console.log(`\n=== ${etapes.length - echecs.length}/${etapes.length} verifications reussies ===`)
+console.log(`\n=== ${etapes.length - echecs.length}/${etapes.length} vérifications réussies ===`)
 if (echecs.length) {
   for (const e of echecs) console.log(' ECHEC:', e.nom, '|', e.detail)
   process.exit(1)

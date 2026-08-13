@@ -476,3 +476,223 @@ body {
   .actions .bouton-principal { width: 100%; }
   .vehicule-details { gap: 1rem; }
 }
+
+/* ---------- Compteurs de l'inventaire ---------- */
+
+.compteurs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.compteur {
+  flex: 1;
+  min-width: 8rem;
+  background: var(--surface);
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  padding: 0.9rem 1rem;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.compteur:hover { border-color: var(--marque-vive); }
+
+.compteur.actif {
+  border-color: var(--marque);
+  box-shadow: inset 0 0 0 1px var(--marque);
+}
+
+.compteur .chiffre {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.compteur .etiquette {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--encre-douce);
+  margin-top: 0.15rem;
+}
+
+.compteur.alerte .chiffre { color: var(--alerte); }
+.compteur.alerte.actif {
+  border-color: var(--alerte);
+  box-shadow: inset 0 0 0 1px var(--alerte);
+}
+
+.filtre {
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+  background: var(--surface);
+  min-width: 12rem;
+}
+
+.resultat { margin: 0 0 0.75rem; }
+
+.lien-stock {
+  color: var(--marque);
+  text-decoration: none;
+}
+
+.lien-stock:hover { text-decoration: underline; }
+
+/* ---------- Fiche véhicule ---------- */
+
+.retour {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  color: var(--encre-douce);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.retour:hover { color: var(--marque); text-decoration: underline; }
+
+.fiche-entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.fiche-entete .titre-page { margin-bottom: 0.15rem; }
+
+.fiche-titre {
+  margin: 0;
+  color: var(--encre-douce);
+  font-size: 1.05rem;
+}
+
+.statut.gros {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.8rem;
+}
+
+.fiche-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.9rem 1.5rem;
+  margin: 0;
+}
+
+.ligne dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--encre-douce);
+}
+
+.ligne dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.notes-fiche {
+  margin: 1rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--trait);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.actions-fiche {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.champ-inline {
+  margin-bottom: 0;
+  min-width: 12rem;
+}
+
+.etiquettes {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.etiquette-equipement {
+  background: var(--fond);
+  border: 1px solid var(--trait);
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.liste-simple {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+}
+
+.liste-simple > li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--trait);
+}
+
+.liste-simple > li:last-child { border-bottom: none; }
+
+.document {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.parcours {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1rem;
+  border-left: 2px solid var(--trait);
+  display: grid;
+  gap: 0.75rem;
+}
+
+.parcours > li {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.92rem;
+}
+
+.parcours > li::before {
+  content: '';
+  position: absolute;
+  left: -1.32rem;
+  top: 0.42rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--marque);
+}
+
+.parcours-jalon { font-weight: 600; }
+.parcours-date { color: var(--encre-douce); }
+
+@media (max-width: 640px) {
+  .fiche-entete { flex-direction: column; }
+  .actions-fiche { flex-direction: column; align-items: stretch; }
+  .champ-inline { min-width: 0; }
+}

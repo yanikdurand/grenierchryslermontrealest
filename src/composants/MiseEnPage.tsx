@@ -30,8 +30,8 @@ export function MiseEnPage() {
               Nouvelle acquisition
             </NavLink>
           )}
-          <NavLink to="/vehicules" className={({ isActive }) => (isActive ? 'actif' : '')}>
-            Véhicules
+          <NavLink to="/inventaire" className={({ isActive }) => (isActive ? 'actif' : '')}>
+            Inventaire
           </NavLink>
         </nav>
 

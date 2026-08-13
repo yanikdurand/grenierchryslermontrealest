@@ -52,7 +52,7 @@ src/
   auth/        connexion, changement de mot de passe forcé, contexte useMoi()
   composants/  ossature de l'application
   lib/         client Supabase, types, traduction des erreurs Postgres
-  pages/       écrans métier
+  pages/       écrans métier (acquisition, inventaire, fiche véhicule)
 supabase/
   migrations/  correctifs appliqués à la base de production
 tests/
@@ -68,10 +68,10 @@ docs/
 | Correctifs et sécurisation de la base | fait |
 | 1 — Authentification et comptes | fait |
 | 4 — Formulaire d'acquisition | fait |
+| 6 — Gestionnaire d'inventaire | fait |
 | 2 — Écran inspection (Catherine) | à faire |
 | 3 — Écran approbation | à faire |
 | 5 — Feuille d'équipements | à faire |
-| 6 — Gestionnaire d'inventaire | à faire |
 | 7 — Réglages admin | à faire |
 | 8 — Tableaux de bord | à faire |
 
