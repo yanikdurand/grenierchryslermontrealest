@@ -69,9 +69,9 @@ docs/
 | 1 — Authentification et comptes | fait |
 | 4 — Formulaire d'acquisition | fait |
 | 6 — Gestionnaire d'inventaire | fait |
+| 5 — Feuille d'équipements | fait |
 | 2 — Écran inspection (Catherine) | à faire |
 | 3 — Écran approbation | à faire |
-| 5 — Feuille d'équipements | à faire |
 | 7 — Réglages admin | à faire |
 | 8 — Tableaux de bord | à faire |
 

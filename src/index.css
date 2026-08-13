@@ -715,3 +715,104 @@ body {
   .actions-fiche { flex-direction: column; align-items: stretch; }
   .champ-inline { min-width: 0; }
 }
+
+/* ---------- Feuille d'équipements ---------- */
+
+.indicateur {
+  font-size: 0.8rem;
+  font-weight: 600;
+  min-height: 1.2rem;
+  white-space: nowrap;
+}
+
+.indicateur.encours { color: var(--encre-douce); }
+.indicateur.fait    { color: var(--succes); }
+.indicateur.erreur  { color: var(--alerte); }
+
+.progression { margin-bottom: 1.25rem; }
+
+.progression .barre {
+  height: 0.5rem;
+  background: var(--trait);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progression .barre span {
+  display: block;
+  height: 100%;
+  background: var(--marque);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.progression .note { margin-top: 0.4rem; }
+
+.sans-marge { margin-top: 0; }
+
+.valeur-vin {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.75rem;
+}
+
+.propositions {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--trait);
+}
+
+.propositions h3 { margin: 0 0 0.75rem; font-size: 0.95rem; }
+
+.categorie { margin-bottom: 1.25rem; }
+
+.categorie h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--encre-douce);
+}
+
+.cases {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.15rem 1rem;
+}
+
+/* Cible confortable au doigt : Jonathan travaille dehors, au téléphone. */
+.cases .case {
+  padding: 0.5rem 0;
+  margin: 0;
+  min-height: 2.75rem;
+}
+
+.pneu {
+  border-top: 1px solid var(--trait);
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+.pneu:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+
+.pneu h3 { margin: 0 0 0.75rem; font-size: 0.95rem; }
+
+.feuille .bloc h2 { font-size: 1.1rem; }
+
+@media (max-width: 640px) {
+  .feuille .grille { grid-template-columns: 1fr; }
+  .feuille .bouton-secondaire,
+  .feuille .bouton-principal { width: 100%; }
+  .cases { grid-template-columns: 1fr; }
+}
+
+.espace-haut { margin-top: 1rem; }
+
+.feuille .bloc > small {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--encre-douce);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}

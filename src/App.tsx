@@ -6,6 +6,7 @@ import { MiseEnPage } from './composants/MiseEnPage'
 import { Acquisition } from './pages/Acquisition'
 import { Inventaire } from './pages/Inventaire'
 import { FicheVehicule } from './pages/FicheVehicule'
+import { FeuilleEquipements } from './pages/FeuilleEquipements'
 
 /** Écran affiché quand un compte Auth n'a pas de ligne `utilisateur` liée. */
 function CompteNonLie() {
@@ -65,6 +66,7 @@ function Routage() {
       <Route element={<MiseEnPage />}>
         <Route path="/inventaire" element={<Inventaire />} />
         <Route path="/vehicule/:id" element={<FicheVehicule />} />
+        <Route path="/vehicule/:id/feuille" element={<FeuilleEquipements />} />
         <Route
           path="/acquisition"
           element={aLeDroit('vehicule.creer') ? <Acquisition /> : <Navigate to="/inventaire" replace />}

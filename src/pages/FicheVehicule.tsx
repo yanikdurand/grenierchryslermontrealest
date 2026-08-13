@@ -307,6 +307,14 @@ export function FicheVehicule() {
         ) : (
           <p className="note">Aucun équipement coché pour l’instant.</p>
         )}
+
+        {aLeDroit('feuille.saisir') && (
+          <div className="vehicule-actions espace-haut">
+            <Link to={`/vehicule/${v.id}/feuille`} className="bouton-secondaire">
+              {v.feuille_complete_le ? 'Revoir la feuille' : 'Remplir la feuille d’équipements'}
+            </Link>
+          </div>
+        )}
       </section>
 
       <section className="bloc">

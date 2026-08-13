@@ -35,6 +35,16 @@ const PROFILS = {
     // Emily voit le prix d'achat mais ni le profit, ni les coûts, ni les leads.
     masque: { prix_achat: 15500, profit: null, cout_base_engage: null, leads_total: null },
   },
+  gestionnaire: {
+    utilisateur: {
+      id: 'u-jo', nom: 'Jonathan Dauphinais', email: 'jdauphinais@grenierchryslermtlest.com',
+      role: 'gestionnaire_inventaire', actif: true, auth_user_id: 'auth-jo',
+    },
+    motDePasse: 'MotDePasseJo1',
+    droits: ['vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
+             'vehicule.voir_prix_achat', 'vehicule.voir_couts', 'feuille.saisir', 'lead.voir'],
+    masque: { prix_achat: 15500, profit: null, cout_base_engage: 1200, leads_total: 3 },
+  },
   vendeur: {
     utilisateur: {
       id: 'u-ludo', nom: 'Ludovick Borris', email: 'lborris@grenierchryslermtlest.com',
@@ -207,7 +217,18 @@ async function scenario(navigateur, cle) {
     return route.fulfill(json({}))
   })
 
-  const prefixe = cle === 'reception' ? 'Réception' : 'Vendeur'
+  // Le registre NHTSA est simulé : le proxy le refuse aussi depuis ici.
+  await contexte.route('**/vpic.nhtsa.dot.gov/**', (route) =>
+    route.fulfill(json({
+      Results: [{
+        Make: 'HONDA', Model: 'Accord', ModelYear: '2021', BodyClass: 'Sedan',
+        DriveType: 'FWD/Front-Wheel Drive', TransmissionStyle: 'Continuously Variable (CVT)',
+        GVWR: 'Class 1: 6,000 lb or less', Seats: '5', ErrorText: '0 - VIN decoded clean.',
+      }],
+    })))
+
+  const prefixe = cle === 'reception' ? 'Réception'
+    : cle === 'gestionnaire' ? 'Gestionnaire' : 'Vendeur'
 
   // Connexion + changement de mot de passe forcé
   await page.goto(ADRESSE, { waitUntil: 'domcontentloaded' })
@@ -294,6 +315,69 @@ async function scenario(navigateur, cle) {
          appels.some((a) => a.fonction === 'maj_prix_vente' && a.p.p_prix === 23495))
   }
 
+  // --- Feuille d'équipements (étape 5) ---
+  if (profil.droits.includes('feuille.saisir')) {
+    const lienFeuille = page.locator('a:has-text("Remplir la feuille")')
+    note(`${prefixe} — accès à la feuille annoncé sur la fiche`,
+         (await lienFeuille.count()) === 1)
+
+    await lienFeuille.first().click()
+    await page.waitForSelector('.feuille', { timeout: 15000 })
+    note(`${prefixe} — feuille ouverte`,
+         (await page.locator('.valeur-vin').textContent())?.includes('1HGCM82633A004352'))
+    note(`${prefixe} — demarrer_feuille appelé à l'ouverture`,
+         appels.some((a) => a.fonction === 'demarrer_feuille'))
+
+    // Décodage du VIN : propose, n'écrase pas
+    await page.locator('button:has-text("Décoder le VIN")').click()
+    await page.waitForSelector('.propositions', { timeout: 10000 })
+    const proposition = await page.locator('.propositions').textContent()
+    note(`${prefixe} — FWD traduit en « TA »`, proposition.includes('TA'))
+    note(`${prefixe} — CVT traduit en « AUTO »`, proposition.includes('AUTO'))
+    note(`${prefixe} — GVWR « Class 1: 6,000 lb » lu comme un nombre`, proposition.includes('6000'))
+
+    const kmAvant = await page.locator('.feuille .champ:has-text("Kilométrage") input').inputValue()
+    await page.locator('button:has-text("Reporter dans le formulaire")').click()
+    await page.waitForTimeout(300)
+    const kmApres = await page.locator('.feuille .champ:has-text("Kilométrage") input').inputValue()
+    note(`${prefixe} — le décodage n'écrase pas un champ déjà saisi`, kmAvant === kmApres)
+
+    // Sauvegarde automatique champ par champ
+    const champCles = page.locator('.feuille .champ:has-text("Nombre de clés") input')
+    await champCles.fill('3')
+    await champCles.blur()
+    await page.waitForTimeout(900)
+    note(`${prefixe} — maj_caracteristiques appelé en quittant le champ`,
+         appels.some((a) => a.fonction === 'maj_caracteristiques' && a.p.p_nb_clefs === 3))
+
+    // Équipement
+    await page.locator('.cases .case:has-text("Toit ouvrant") input').check()
+    await page.waitForTimeout(700)
+    note(`${prefixe} — basculer_equipement appelé`,
+         appels.some((a) => a.fonction === 'basculer_equipement' && a.p.p_actif === true))
+
+    // Pneus
+    const bloc = page.locator('form.pneu').first()
+    await bloc.locator('input[name=largeur]').fill('235')
+    await bloc.locator('button[type=submit]').click()
+    await page.waitForTimeout(900)
+    note(`${prefixe} — enregistrer_pneu appelé`,
+         appels.some((a) => a.fonction === 'enregistrer_pneu' && a.p.p_largeur === 235))
+
+    // Complétion et envoi au service
+    await page.locator('button:has-text("Compléter la feuille")').click()
+    await page.waitForTimeout(900)
+    note(`${prefixe} — completer_feuille appelé`,
+         appels.some((a) => a.fonction === 'completer_feuille'))
+
+    await page.locator('button:has-text("Envoyer au service")').click()
+    await page.waitForTimeout(900)
+    note(`${prefixe} — envoyer_au_service appelé`,
+         appels.some((a) => a.fonction === 'envoyer_au_service'))
+
+    await page.screenshot({ path: `apercu-feuille-${cle}.png`, fullPage: true })
+  }
+
   await page.screenshot({ path: `apercu-fiche-${cle}.png`, fullPage: true })
   await contexte.close()
 }
@@ -303,6 +387,7 @@ async function scenario(navigateur, cle) {
 const navigateur = await chromium.launch({ executablePath: CHROME })
 try {
   await scenario(navigateur, 'reception')
+  await scenario(navigateur, 'gestionnaire')
   await scenario(navigateur, 'vendeur')
 } catch (e) {
   note('Exécution du scénario', false, e.message.split('\n')[0])
