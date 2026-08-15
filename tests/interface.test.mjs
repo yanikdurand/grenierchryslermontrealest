@@ -155,7 +155,10 @@ async function scenario(navigateur, cle) {
       cout: 450, complete: false, complete_le: null, decision: 'en_attente', decide_le: null },
   ]
 
-  const contexte = await navigateur.newContext({ viewport: { width: 1280, height: 900 } })
+  // LARGEUR permet de rejouer le scénario sur un grand écran, là où le
+  // centrage de la colonne se vérifie.
+  const largeur = Number(process.env.LARGEUR ?? 1280)
+  const contexte = await navigateur.newContext({ viewport: { width: largeur, height: 900 } })
   const page = await contexte.newPage()
   page.on('pageerror', (e) => console.log('ERREUR JS:', e.message))
 

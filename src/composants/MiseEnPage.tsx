@@ -117,11 +117,14 @@ export function MiseEnPage() {
 
       <aside className={`lateral ${ouvert ? 'ouvert' : ''}`}>
         <div className="lateral-marque">
-          <span className="pastille-marque">GC</span>
-          <span className="lateral-marque-texte">
-            <strong>Grenier Chrysler</strong>
-            <span>Montréal-Est</span>
-          </span>
+          <img
+            className="logo-lateral"
+            src="/logo-grenier.png"
+            alt="Grenier Chrysler"
+            width={720}
+            height={124}
+          />
+          <span className="lateral-marque-texte">Montréal-Est · Inventaire</span>
         </div>
 
         <nav className="lateral-nav">

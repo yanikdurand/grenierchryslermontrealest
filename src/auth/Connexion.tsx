@@ -29,8 +29,15 @@ export function Connexion() {
   return (
     <div className="ecran-centre">
       <form className="carte carte-etroite" onSubmit={soumettre}>
-        <h1 className="titre-marque">Grenier Chrysler</h1>
-        <p className="sous-titre">Gestion d’inventaire</p>
+        <img
+          className="logo-connexion"
+          src="/logo-grenier.png"
+          alt="Grenier Chrysler"
+          width={720}
+          height={124}
+        />
+        <h1 className="titre-marque">Gestion d’inventaire</h1>
+        <p className="sous-titre">Montréal-Est</p>
 
         <label className="champ">
           <span>Courriel</span>
@@ -65,6 +72,18 @@ export function Connexion() {
           Mot de passe oublié ? Contactez Yanik — les comptes sont gérés à l’interne.
         </p>
       </form>
+
+      {/*
+        Le verrou complet porte les marques Chrysler, Dodge, Jeep, RAM et FIAT.
+        Elles ne se lisent qu'en largeur : c'est le seul écran qui en a.
+      */}
+      <img
+        className="verrou-marques"
+        src="/logo-grenier-complet.png"
+        alt="Chrysler · Dodge · Jeep · RAM · FIAT"
+        width={1600}
+        height={83}
+      />
     </div>
   )
 }
