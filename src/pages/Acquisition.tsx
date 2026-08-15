@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { messageErreur } from '../lib/erreurs'
 import { useMoi } from '../auth/MoiContexte'
@@ -89,6 +89,14 @@ export function Acquisition() {
   const [decodageMessage, setDecodageMessage] = useState<string | null>(null)
   const [dernierVinDecode, setDernierVinDecode] = useState('')
 
+  // Doublon de VIN ou de numéro de stock — un avertissement, pas un blocage :
+  // `creer_vehicule` refuse déjà le doublon à l'envoi (contrainte UNIQUE en
+  // base). Ceci n'existe que pour éviter de remplir tout le formulaire, pièce
+  // jointe comprise, avant de le découvrir.
+  type VehiculeExistant = { id: string; titre: string } | null
+  const [vinExistant, setVinExistant] = useState<VehiculeExistant>(null)
+  const [noStockExistant, setNoStockExistant] = useState<VehiculeExistant>(null)
+
   const marqueEffective = marque === VALEUR_AUTRE ? marqueAutre.trim() : marque
   const modeleEffectif = modele === VALEUR_AUTRE ? modeleAutre.trim() : modele
 
@@ -159,6 +167,50 @@ export function Acquisition() {
 
     return () => clearTimeout(delai)
   }, [vin, dernierVinDecode])
+
+  /**
+   * Le VIN est unique en base (contrainte `vehicule_vin_key`) : un doublon
+   * est déjà structurellement impossible. Ce qui manquait, c'est de le dire
+   * avant que la personne ait rempli quinze champs et joint une facture.
+   */
+  useEffect(() => {
+    const propre = vin.trim().toUpperCase()
+    if (propre.length !== LONGUEUR_VIN || vinInvalide(propre)) { setVinExistant(null); return }
+
+    let annule = false
+    const delai = setTimeout(async () => {
+      const { data } = await supabase
+        .from('v_vehicule_app')
+        .select('id, no_stock, vehicule_titre')
+        .eq('vin', propre)
+        .maybeSingle()
+      if (!annule) {
+        setVinExistant(data ? { id: data.id, titre: `${data.no_stock} — ${data.vehicule_titre}` } : null)
+      }
+    }, 400)
+
+    return () => { annule = true; clearTimeout(delai) }
+  }, [vin])
+
+  /** Même principe pour le numéro de stock (contrainte `vehicule_no_stock_key`). */
+  useEffect(() => {
+    const propre = noStock.trim().toUpperCase()
+    if (!propre) { setNoStockExistant(null); return }
+
+    let annule = false
+    const delai = setTimeout(async () => {
+      const { data } = await supabase
+        .from('v_vehicule_app')
+        .select('id, no_stock, vehicule_titre')
+        .eq('no_stock', propre)
+        .maybeSingle()
+      if (!annule) {
+        setNoStockExistant(data ? { id: data.id, titre: data.vehicule_titre } : null)
+      }
+    }, 400)
+
+    return () => { annule = true; clearTimeout(delai) }
+  }, [noStock])
 
   useEffect(() => {
     supabase
@@ -318,7 +370,19 @@ export function Acquisition() {
           <div className="grille">
             <label className="champ">
               <span>Numéro de stock <em>obligatoire</em></span>
-              <input value={noStock} onChange={(e) => setNoStock(e.target.value)} required autoFocus />
+              <input
+                value={noStock}
+                onChange={(e) => setNoStock(e.target.value.toUpperCase())}
+                required
+                autoFocus
+              />
+              {noStockExistant && (
+                <p className="message-avertissement espace-haut">
+                  Ce numéro de stock existe déjà — <Link to={`/vehicule/${noStockExistant.id}`}>
+                    {noStockExistant.titre}
+                  </Link>. Choisissez-en un autre.
+                </p>
+              )}
             </label>
 
             <label className="champ">
@@ -332,6 +396,13 @@ export function Acquisition() {
               />
               {vin.length > 0 && vinInvalide(vin) && (
                 <small className="indice-erreur">{vinInvalide(vin)}</small>
+              )}
+              {vinExistant && (
+                <p className="message-avertissement espace-haut">
+                  Ce VIN est déjà en inventaire — <Link to={`/vehicule/${vinExistant.id}`}>
+                    {vinExistant.titre}
+                  </Link>.
+                </p>
               )}
               {decodage === 'encours' && <small>Décodage du VIN…</small>}
               {decodage === 'succes' && (
