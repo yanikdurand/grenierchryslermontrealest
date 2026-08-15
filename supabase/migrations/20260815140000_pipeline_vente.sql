@@ -1,0 +1,60 @@
+-- Pipeline de vente — le statut du véhicule devient une conséquence
+--
+-- Appliqué en quatre migrations : pipeline_vente_structure,
+-- pipeline_vente_triggers, pipeline_vente_permissions_et_actions,
+-- pipeline_vente_rls. Ce fichier les rassemble pour la relecture.
+--
+-- Principe
+-- --------
+-- Personne ne déclare un statut. On note ce qui s'est passé — vendu, approuvé,
+-- livré — et le statut du véhicule en découle **par trigger**. Le menu de 19
+-- statuts qui permettait de passer un véhicule de « ATT. RÉCEPTION » à
+-- « LIVRÉ » d'un clic n'a plus de raison d'être.
+--
+-- C'est le premier ajout de structure depuis l'ouverture du dépôt : deux
+-- tables, `vente` et `vente_historique`. Rien d'existant n'est modifié.
+--
+-- Carte des états
+-- ---------------
+--   depot                      -> DÉPÔT RÉSERVÉ
+--   vendu    + financement     -> ATT. APPROBATION
+--   vendu    + comptant/loc.   -> ATT. LIVRAISON
+--   approuve                   -> ATT. LIVRAISON
+--   livre                      -> LIVRÉ
+--   annule                     -> DISPONIBLE
+--
+-- Le cas d'affaires qui motive tout
+-- ---------------------------------
+-- `force_dossier` (fort | moyen | faible) est noté par la F&I. Un dossier
+-- faible laisse la vente en « ATT. APPROBATION » : le véhicule est visiblement
+-- à risque, ce qui autorise à travailler un second client plutôt que de
+-- l'immobiliser et de perdre la vente. C'est ce qui coûte des ventes
+-- aujourd'hui, faute de le voir.
+--
+-- Écriture verrouillée
+-- --------------------
+-- `vente` n'a **aucune politique d'écriture**. Elle ne se modifie que par les
+-- quatre fonctions métier, SECURITY DEFINER, qui portent les gardes. Vérifié :
+-- un UPDATE direct par un admin laisse l'état inchangé. Sans ce verrou, le
+-- pipeline serait contournable et le statut mentirait à nouveau.
+--
+-- Droits
+-- ------
+-- Trois permissions nouvelles, configurables depuis l'écran de réglages :
+-- `vente.enregistrer`, `vente.financement`, `vente.livrer`. Deux rôles sont
+-- amorcés sans titulaire — `financement` et `livraison` — à assigner depuis
+-- les réglages.
+--
+-- Vérification (jetons réels, jeu d'essai créé puis supprimé, 0 reste)
+-- --------------------------------------------------------------------
+--   Vendeur enregistre une vente     -> refusé, message français
+--   Vendu (financement)              -> ATT. APPROBATION
+--   UPDATE direct sur vente          -> aucun effet, état reste « vendu »
+--   Aviseur note une approbation     -> refusé
+--   Dossier faible, non approuvé     -> reste ATT. APPROBATION, force=faible
+--   Approuvé                         -> ATT. LIVRAISON
+--   Livré                            -> LIVRÉ
+--   Journal  (neuf) -> vendu | vendu -> approuve | approuve -> livre
+--
+-- Le SQL exact appliqué se trouve dans l'historique des migrations Supabase
+-- sous les quatre noms cités en tête.
