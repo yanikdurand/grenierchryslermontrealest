@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { messageErreur } from '../lib/erreurs'
 import { useMoi } from '../auth/MoiContexte'
 import { decoderVin } from '../lib/nhtsa'
-import { chargerMarques, chargerModeles } from '../lib/referentielVehicules'
+import { MARQUES, chargerModeles } from '../lib/referentielVehicules'
 import type { Fournisseur, TypeDocument } from '../lib/types'
 
 const ECHANGE_CLIENT = 'Échange client'
@@ -77,8 +77,10 @@ export function Acquisition() {
   const [avertissement, setAvertissement] = useState<string | null>(null)
   const [envoi, setEnvoi] = useState(false)
 
-  // Marque et modèle en menu déroulant, sur le modèle des sites de listing.
-  const [marques, setMarques] = useState<string[]>([])
+  // Modèle en menu déroulant, cascadé sur la marque et l'année — la marque
+  // elle-même vient de la liste éditoriale `MARQUES`, pas de NHTSA (voir
+  // referentielVehicules.ts : NHTSA mélange marques grand public et
+  // fabricants de balayeuses).
   const [modeles, setModeles] = useState<string[]>([])
   const [chargementModeles, setChargementModeles] = useState(false)
 
@@ -89,12 +91,6 @@ export function Acquisition() {
 
   const marqueEffective = marque === VALEUR_AUTRE ? marqueAutre.trim() : marque
   const modeleEffectif = modele === VALEUR_AUTRE ? modeleAutre.trim() : modele
-
-  useEffect(() => {
-    chargerMarques()
-      .then(setMarques)
-      .catch(() => setMarques([])) // Le menu reste utilisable via « Autre » si NHTSA est injoignable.
-  }, [])
 
   // Le modèle dépend de la marque et de l'année : impossible de filtrer sans les deux.
   useEffect(() => {
@@ -198,13 +194,14 @@ export function Acquisition() {
     fournisseur, fournisseurAutre, justificatif, saaqRequisPourFormulaire, requiertSaaq,
   ])
 
-  // Si le décodage ou une saisie précédente propose une valeur hors liste
-  // NHTSA, elle reste visible dans le menu plutôt que de disparaître.
+  // Si le décodage propose une marque hors de la liste éditoriale (un import
+  // rare, par exemple), elle reste visible dans le menu plutôt que de
+  // disparaître silencieusement.
   const optionsMarque = useMemo(() => {
-    const s = new Set(marques)
+    const s = new Set(MARQUES)
     if (marque && marque !== VALEUR_AUTRE) s.add(marque)
     return [...s].sort((a, b) => a.localeCompare(b, 'fr'))
-  }, [marques, marque])
+  }, [marque])
 
   const optionsModele = useMemo(() => {
     const s = new Set(modeles)
