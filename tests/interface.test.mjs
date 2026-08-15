@@ -56,7 +56,7 @@ const PROFILS = {
              'inspection.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer',
              'vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
              'vehicule.voir_couts', 'vehicule.voir_prix_achat', 'vehicule.voir_profit',
-             'vente.enregistrer', 'vente.financement', 'vente.livrer'],
+             'vente.enregistrer', 'vente.financement', 'vente.livrer', 'lead.saisir'],
     masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
   },
   directeur: {
@@ -69,7 +69,7 @@ const PROFILS = {
              'vehicule.voir_prix_achat', 'vehicule.voir_couts', 'vehicule.voir_profit',
              'feuille.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer',
              'inspection.saisir', 'inspection.approuver', 'alerte.resoudre', 'affichage.voir',
-             'vente.enregistrer', 'vente.financement'],
+             'vente.enregistrer', 'vente.financement', 'lead.saisir'],
     masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
   },
   aviseur: {
@@ -145,6 +145,7 @@ async function scenario(navigateur, cle) {
 
   const voitCouts = profil.droits.includes('vehicule.voir_couts')
   let ventes = []
+  let visites = []
   let lignes = [
     { id: 'l1', no_ligne: 1, description: 'Pneus à changer', code_reparation_id: 1,
       cout: 800, complete: false, complete_le: null, decision: 'en_attente', decide_le: null },
@@ -307,6 +308,24 @@ async function scenario(navigateur, cle) {
     }
     if (chemin === '/rest/v1/crm_lead') return route.fulfill(json([]))
     if (chemin === '/rest/v1/v_vente_app') return route.fulfill(json(ventes))
+    if (chemin === '/rest/v1/v_visite_app') return route.fulfill(json(visites))
+    if (chemin === '/rest/v1/lead_showroom') {
+      if (methode === 'POST') {
+        const corps = JSON.parse(req.postData() || '{}')
+        appels.push({ fonction: 'lead_showroom', p: corps })
+        visites = [{
+          id: 'vis-1', date_visite: corps.date_visite, client: corps.client,
+          telephone: corps.telephone, statut: corps.statut, source: corps.source,
+          neuf_usage: corps.neuf_usage, chrys_conq: corps.chrys_conq, echange: corps.echange,
+          vehicule_id: corps.vehicule_id, no_stock: corps.vehicule_id ? 'A1234' : null,
+          vehicule: null, vendeur_id: corps.vendeur_id, vendeur: null,
+          saisi_par_direction: 'Direction', notes: corps.notes,
+          cree_le: new Date().toISOString(),
+        }, ...visites]
+        return route.fulfill(json([], 201))
+      }
+      return route.fulfill(json(visites))
+    }
     if (chemin === '/rest/v1/code_reparation') return route.fulfill(json(CODES))
     if (chemin === '/rest/v1/decision_historique') return route.fulfill(json([]))
     if (chemin === '/rest/v1/inspection_ligne') {
@@ -677,6 +696,31 @@ async function scenario(navigateur, cle) {
     await page.screenshot({ path: `apercu-ventes-${cle}.png`, fullPage: true })
   }
 
+  // --- Visites du jour (phone-up / walk-in) ---
+  const voitVisites = profil.droits.includes('lead.saisir') || profil.droits.includes('lead.voir')
+  note(`${prefixe} — onglet Visites ${voitVisites ? 'visible' : 'masqué'}`,
+       ((await page.locator('nav a:has-text("Visites")').count()) === 1) === voitVisites)
+
+  if (profil.droits.includes('lead.saisir')) {
+    await page.click('nav a:has-text("Visites")')
+    await page.waitForSelector('.compteurs', { timeout: 15000 })
+
+    await page.fill('input[name=client]', 'Client Walkin')
+    await page.fill('input[name=telephone]', '514-555-1111')
+    await page.locator('button:has-text("Ajouter la visite")').click()
+    await page.waitForTimeout(1200)
+    note(`${prefixe} — visite enregistrée`,
+         appels.some((a) => a.fonction === 'lead_showroom' && a.p.client === 'Client Walkin'))
+    note(`${prefixe} — la direction est tracée comme saisisseur`,
+         appels.some((a) => a.fonction === 'lead_showroom' && a.p.direction_id))
+    note(`${prefixe} — le compteur Walk-in a suivi`,
+         (await page.locator('.compteur:has-text("Walk-in") .chiffre').textContent()) === '1')
+    note(`${prefixe} — le curseur revient au nom du client`,
+         await page.locator('input[name=client]').evaluate((el) => el === document.activeElement))
+
+    await page.screenshot({ path: `apercu-visites-${cle}.png`, fullPage: true })
+  }
+
   // --- Réglages (étape 7) ---
   const droitsAdmin = ['admin.utilisateurs', 'admin.permissions', 'admin.notifications']
   const voitReglages = droitsAdmin.some((d) => profil.droits.includes(d))
@@ -752,7 +796,7 @@ const TOUS_LES_DROITS = [
   'inspection.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer', 'vehicule.creer',
   'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir', 'vehicule.voir_couts',
   'vehicule.voir_prix_achat', 'vehicule.voir_profit',
-  'vente.enregistrer', 'vente.financement', 'vente.livrer',
+  'vente.enregistrer', 'vente.financement', 'vente.livrer', 'lead.saisir',
 ]
 const couverts = new Set(Object.values(PROFILS).flatMap((p) => p.droits))
 const orphelins = TOUS_LES_DROITS.filter((d) => !couverts.has(d))

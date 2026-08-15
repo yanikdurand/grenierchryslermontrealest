@@ -80,6 +80,7 @@ docs/
 | 7 — Réglages admin | fait |
 | Accueil par rôle et files nommées | fait |
 | Pipeline de vente (statut = conséquence) | fait |
+| Visites du jour (phone-up / walk-in) | fait |
 | 8 — Tableaux de bord | à faire |
 
 Il reste les tableaux de bord (étape 8), à trancher entre Metabase branché sur

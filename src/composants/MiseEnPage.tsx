@@ -48,6 +48,11 @@ export function MiseEnPage() {
               Ventes
             </NavLink>
           )}
+          {(aLeDroit('lead.saisir') || aLeDroit('lead.voir')) && (
+            <NavLink to="/visites" className={({ isActive }) => (isActive ? 'actif' : '')}>
+              Visites
+            </NavLink>
+          )}
           {(aLeDroit('admin.utilisateurs') || aLeDroit('admin.permissions')
             || aLeDroit('admin.notifications')) && (
             <NavLink to="/reglages" className={({ isActive }) => (isActive ? 'actif' : '')}>
