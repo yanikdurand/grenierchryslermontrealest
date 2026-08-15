@@ -144,6 +144,8 @@ async function scenario(navigateur, cle) {
   let vehicule = vehiculeDemo(profil)
 
   const voitCouts = profil.droits.includes('vehicule.voir_couts')
+  const voitProfit = profil.droits.includes('vehicule.voir_profit')
+  const voitPrixAchat = profil.droits.includes('vehicule.voir_prix_achat')
   let ventes = []
   let visites = []
   let lignes = [
@@ -309,6 +311,36 @@ async function scenario(navigateur, cle) {
     if (chemin === '/rest/v1/crm_lead') return route.fulfill(json([]))
     if (chemin === '/rest/v1/v_vente_app') return route.fulfill(json(ventes))
     if (chemin === '/rest/v1/v_visite_app') return route.fulfill(json(visites))
+    if (chemin === '/rest/v1/v_kpi_stock_app') {
+      return route.fulfill(json({ vehicules_en_stock: 110, vieillissants: 18,
+        age_moyen: 64, age_median: 52, non_affiches: 9, sans_vin: 3,
+        capital_immobilise: voitPrixAchat ? 2450000 : null }))
+    }
+    if (chemin === '/rest/v1/v_kpi_affichage') {
+      return route.fulfill(json({ vehicules_a_afficher: 110, en_ligne: 101, hors_ligne: 9,
+        affiches_sans_photo: 4, affiches_moins_10_photos: 12, photos_moyennes: 21,
+        pct_en_ligne: 91.8 }))
+    }
+    if (chemin === '/rest/v1/v_ventes_app') {
+      return route.fulfill(json([
+        { no_stock: 'A1', marque: 'HONDA', modele: 'ACCORD', prix_vente: 24995,
+          profit_net: voitProfit ? 2400 : null, marge_brute: voitProfit ? 5200 : null,
+          jours_avant_vente: 34, mois_reception: '2026-07-01' },
+        { no_stock: 'A2', marque: 'RAM', modele: '1500', prix_vente: 41995,
+          profit_net: voitProfit ? 3100 : null, marge_brute: voitProfit ? 6100 : null,
+          jours_avant_vente: 21, mois_reception: '2026-07-01' },
+      ]))
+    }
+    if (chemin === '/rest/v1/v_leads_par_source') {
+      return route.fulfill(json([
+        { source: 'Web', type_lead: 'Prix', mois: '2026-08-01', leads: 40, avec_telephone: 30 },
+        { source: 'Téléphone', type_lead: 'Info', mois: '2026-08-01', leads: 12, avec_telephone: 12 },
+      ]))
+    }
+    if (chemin === '/rest/v1/v_stock_sans_lead') {
+      return route.fulfill(json([{ no_stock: 'C9', vehicule: '2019 JEEP CHEROKEE',
+        prix_vente: 22995, jours_inventaire: 120, photos: 4 }]))
+    }
     if (chemin === '/rest/v1/v_goulots') {
       return route.fulfill(json([
         { no_stock: 'A1234', vehicule: '2021 HONDA ACCORD', statut: 'VÉHICULE REÇU',
@@ -707,6 +739,29 @@ async function scenario(navigateur, cle) {
     }
 
     await page.screenshot({ path: `apercu-ventes-${cle}.png`, fullPage: true })
+  }
+
+  // --- Tableaux de bord ---
+  const voitRapports = profil.droits.includes('rapport.voir')
+  note(`${prefixe} — onglet Tableaux de bord ${voitRapports ? 'visible' : 'masqué'}`,
+       ((await page.locator('nav a:has-text("Tableaux de bord")').count()) === 1) === voitRapports)
+
+  if (voitRapports) {
+    await page.click('nav a:has-text("Tableaux de bord")')
+    await page.waitForSelector('.compteurs', { timeout: 15000 })
+    const texteBord = await page.locator('.page').textContent()
+
+    note(`${prefixe} — indicateurs de stock affichés`, texteBord.includes('Vieillissants'))
+    note(`${prefixe} — affichage web affiché`, texteBord.includes('Taux en ligne'))
+    note(`${prefixe} — profit ${voitProfit ? 'affiché' : 'masqué'}`,
+         texteBord.includes('Profit moyen') === voitProfit)
+    note(`${prefixe} — capital immobilisé ${voitPrixAchat ? 'affiché' : 'masqué'}`,
+         texteBord.includes('Capital immobilisé') === voitPrixAchat)
+    note(`${prefixe} — leads par source en barres`,
+         (await page.locator('.barres > li').count()) === 2)
+    note(`${prefixe} — stock sans lead signalé`, texteBord.includes('sans lead depuis 30 jours'))
+
+    await page.screenshot({ path: `apercu-tableaux-${cle}.png`, fullPage: true })
   }
 
   // --- Parcours : où les véhicules bloquent ---

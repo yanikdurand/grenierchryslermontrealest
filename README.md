@@ -82,7 +82,8 @@ docs/
 | Pipeline de vente (statut = conséquence) | fait |
 | Visites du jour (phone-up / walk-in) | fait |
 | Parcours et goulots | fait |
-| 8 — Tableaux de bord | à faire |
+| 8 — Tableaux de bord | fait |
 
-Il reste les tableaux de bord (étape 8), à trancher entre Metabase branché sur
-Supabase et des écrans codés à la main.
+Prochaine étape : la passe UI/UX, avec les références de l'équipe. La fiche
+véhicule sur téléphone y sera reprise — elle fait 3683 px de haut, un champ
+par ligne. Seul Jonathan travaille sur mobile pour l'instant.

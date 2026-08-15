@@ -11,6 +11,23 @@ export function argent(valeur: number | null | undefined): string {
   })
 }
 
+/**
+ * Montant abrégé pour les tuiles de tableau de bord : « 2,45 M$ » plutôt que
+ * « 2 450 000 $ », qui débordait de sa tuile ou se coupait en plein milieu.
+ * Le montant exact reste disponible en infobulle.
+ */
+export function argentCompact(valeur: number | null | undefined): string {
+  if (valeur === null || valeur === undefined) return ABSENT
+  const absolu = Math.abs(valeur)
+  if (absolu >= 1_000_000) {
+    return `${(valeur / 1_000_000).toLocaleString('fr-CA', { maximumFractionDigits: 2 })} M$`
+  }
+  if (absolu >= 100_000) {
+    return `${Math.round(valeur / 1000).toLocaleString('fr-CA')} k$`
+  }
+  return argent(valeur)
+}
+
 export function nombre(valeur: number | null | undefined, suffixe = ''): string {
   if (valeur === null || valeur === undefined) return ABSENT
   return valeur.toLocaleString('fr-CA') + suffixe

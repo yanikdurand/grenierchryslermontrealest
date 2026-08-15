@@ -43,6 +43,11 @@ export function MiseEnPage() {
             </NavLink>
           )}
           {aLeDroit('rapport.voir') && (
+            <NavLink to="/tableaux" className={({ isActive }) => (isActive ? 'actif' : '')}>
+              Tableaux de bord
+            </NavLink>
+          )}
+          {aLeDroit('rapport.voir') && (
             <NavLink to="/parcours" className={({ isActive }) => (isActive ? 'actif' : '')}>
               Parcours
             </NavLink>
