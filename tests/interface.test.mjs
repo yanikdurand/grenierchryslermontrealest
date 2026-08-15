@@ -55,7 +55,8 @@ const PROFILS = {
              'alerte.resoudre', 'feuille.saisir', 'inspection.approuver', 'inspection.completer',
              'inspection.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer',
              'vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
-             'vehicule.voir_couts', 'vehicule.voir_prix_achat', 'vehicule.voir_profit'],
+             'vehicule.voir_couts', 'vehicule.voir_prix_achat', 'vehicule.voir_profit',
+             'vente.enregistrer', 'vente.financement', 'vente.livrer'],
     masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
   },
   directeur: {
@@ -67,7 +68,8 @@ const PROFILS = {
     droits: ['vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
              'vehicule.voir_prix_achat', 'vehicule.voir_couts', 'vehicule.voir_profit',
              'feuille.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer',
-             'inspection.saisir', 'inspection.approuver', 'alerte.resoudre', 'affichage.voir'],
+             'inspection.saisir', 'inspection.approuver', 'alerte.resoudre', 'affichage.voir',
+             'vente.enregistrer', 'vente.financement'],
     masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
   },
   aviseur: {
@@ -142,6 +144,7 @@ async function scenario(navigateur, cle) {
   let vehicule = vehiculeDemo(profil)
 
   const voitCouts = profil.droits.includes('vehicule.voir_couts')
+  let ventes = []
   let lignes = [
     { id: 'l1', no_ligne: 1, description: 'Pneus à changer', code_reparation_id: 1,
       cout: 800, complete: false, complete_le: null, decision: 'en_attente', decide_le: null },
@@ -303,6 +306,7 @@ async function scenario(navigateur, cle) {
       ]))
     }
     if (chemin === '/rest/v1/crm_lead') return route.fulfill(json([]))
+    if (chemin === '/rest/v1/v_vente_app') return route.fulfill(json(ventes))
     if (chemin === '/rest/v1/code_reparation') return route.fulfill(json(CODES))
     if (chemin === '/rest/v1/decision_historique') return route.fulfill(json([]))
     if (chemin === '/rest/v1/inspection_ligne') {
@@ -354,6 +358,33 @@ async function scenario(navigateur, cle) {
         vehicule = { ...vehicule, saaq_complete_le: new Date().toISOString(), alertes: 'Lien existant', nb_critiques: 1 }
       }
       if (fonction === 'maj_prix_vente') vehicule = { ...vehicule, prix_vente: p.p_prix }
+      if (fonction === 'deplacer_vehicule') {
+        const carte = { garage_interne: 'MÉCANIQUE INT.', disponible: 'DISPONIBLE',
+                        terrebonne: 'TERREBONNE', wholesale: 'WHOLESALE' }
+        vehicule = { ...vehicule, statut: carte[p.p_mouvement] ?? vehicule.statut }
+      }
+      if (fonction === 'enregistrer_vente') {
+        ventes = [{
+          id: 'vte-1', vehicule_id: p.p_vehicule, no_stock: 'A1234',
+          vehicule_titre: '2021 HONDA ACCORD', statut_vehicule: 'ATT. APPROBATION',
+          client: p.p_client, telephone: p.p_telephone, courriel: null,
+          vendeur: null, vendeur_id: null, type_transaction: p.p_type_transaction,
+          prix_vendu: p.p_prix, etat: 'vendu', force_dossier: null, fi: null, fi_le: null,
+          date_livraison_prevue: null, livre_le: null, livre_par_nom: null,
+          annule_le: null, motif_annulation: null, lien_crm: null, notes: null,
+          cree_le: new Date().toISOString(), cree_par_nom: 'Test',
+        }]
+        return route.fulfill(json('vte-1'))
+      }
+      if (fonction === 'noter_approbation') {
+        ventes = ventes.map((x) => ({ ...x, force_dossier: p.p_force_dossier,
+          etat: p.p_approuve ? 'approuve' : x.etat,
+          statut_vehicule: p.p_approuve ? 'ATT. LIVRAISON' : x.statut_vehicule }))
+      }
+      if (fonction === 'noter_livraison') {
+        ventes = ventes.map((x) => ({ ...x, etat: 'livre', livre_le: new Date().toISOString(),
+          statut_vehicule: 'LIVRÉ' }))
+      }
       return route.fulfill(json(fonction === 'creer_vehicule' ? 'veh-1' : null))
     }
 
@@ -470,11 +501,15 @@ async function scenario(navigateur, cle) {
        (boutonSaaq > 0) === attenduSaaq)
 
   if (peutModifier) {
-    await page.selectOption('.bloc:has-text("Actions") select', 'MÉCANIQUE INT.')
-    await page.locator('button:has-text("Changer le statut")').click()
+    // Le menu de statuts n'existe plus : on note un fait, le statut suit.
+    note(`${prefixe} — aucun menu de statut libre sur la fiche`,
+         (await page.locator('.bloc:has-text("Actions") select').count()) === 0)
+
+    await page.locator('button:has-text("Entré au garage")').click()
     await page.waitForTimeout(1200)
-    note(`${prefixe} — changer_statut appelé`,
-         appels.some((a) => a.fonction === 'changer_statut' && a.p.p_statut === 'MÉCANIQUE INT.'))
+    note(`${prefixe} — deplacer_vehicule appelé`,
+         appels.some((a) => a.fonction === 'deplacer_vehicule'
+                         && a.p.p_mouvement === 'garage_interne'))
     note(`${prefixe} — statut rafraîchi à l'écran`,
          (await page.locator('.statut.gros').textContent())?.includes('MÉCANIQUE'))
 
@@ -603,6 +638,45 @@ async function scenario(navigateur, cle) {
     await page.screenshot({ path: `apercu-inspection-${cle}.png`, fullPage: true })
   }
 
+  // --- Ventes : le statut comme conséquence ---
+  const droitsVente = ['vente.enregistrer', 'vente.financement', 'vente.livrer']
+  const voitVentes = droitsVente.some((d) => profil.droits.includes(d))
+  note(`${prefixe} — onglet Ventes ${voitVentes ? 'visible' : 'masqué'}`,
+       ((await page.locator('nav a:has-text("Ventes")').count()) === 1) === voitVentes)
+
+  if (voitVentes && profil.droits.includes('vente.enregistrer')) {
+    await page.click('nav a:has-text("Ventes")')
+    await page.waitForSelector('.compteurs', { timeout: 15000 })
+
+    await page.locator('button:has-text("Nouvelle vente")').click()
+    await page.waitForSelector('form select[name=vehicule]', { timeout: 5000 })
+    await page.selectOption('select[name=vehicule]', { index: 1 })
+    await page.fill('input[name=client]', 'Client Essai')
+    await page.selectOption('select[name=type]', 'financement')
+    await page.fill('input[name=telephone]', '514-555-0000')
+    await page.locator('button:has-text("Enregistrer la vente")').click()
+    await page.waitForTimeout(1200)
+    note(`${prefixe} — enregistrer_vente appelé`,
+         appels.some((a) => a.fonction === 'enregistrer_vente'
+                         && a.p.p_type_transaction === 'financement'))
+    note(`${prefixe} — le dossier apparaît avec le statut dérivé`,
+         (await page.locator('.vente').first().textContent())?.includes('ATT. APPROBATION'))
+
+    if (profil.droits.includes('vente.financement')) {
+      await page.locator('summary:has-text("Noter l’approbation")').first().click()
+      await page.selectOption('select[name=force]', 'faible')
+      await page.locator('.formulaire-court button:has-text("Enregistrer")').first().click()
+      await page.waitForTimeout(1200)
+      note(`${prefixe} — dossier qualifié faible`,
+           appels.some((a) => a.fonction === 'noter_approbation'
+                           && a.p.p_force_dossier === 'faible'))
+      note(`${prefixe} — l'alerte « second client » s'affiche`,
+           (await page.locator('.vente .alerte.critique').count()) === 1)
+    }
+
+    await page.screenshot({ path: `apercu-ventes-${cle}.png`, fullPage: true })
+  }
+
   // --- Réglages (étape 7) ---
   const droitsAdmin = ['admin.utilisateurs', 'admin.permissions', 'admin.notifications']
   const voitReglages = droitsAdmin.some((d) => profil.droits.includes(d))
@@ -668,6 +742,22 @@ try {
 } finally {
   await navigateur.close()
 }
+
+// Garde-fou : un droit qu'aucun profil ne detient laisse son ecran non teste,
+// et ses assertions passent a vide. C'est arrive trois fois — approbation,
+// reglages, ventes. On le detecte desormais.
+const TOUS_LES_DROITS = [
+  'admin.notifications', 'admin.permissions', 'admin.utilisateurs', 'affichage.voir',
+  'alerte.resoudre', 'feuille.saisir', 'inspection.approuver', 'inspection.completer',
+  'inspection.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer', 'vehicule.creer',
+  'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir', 'vehicule.voir_couts',
+  'vehicule.voir_prix_achat', 'vehicule.voir_profit',
+  'vente.enregistrer', 'vente.financement', 'vente.livrer',
+]
+const couverts = new Set(Object.values(PROFILS).flatMap((p) => p.droits))
+const orphelins = TOUS_LES_DROITS.filter((d) => !couverts.has(d))
+note('Chaque droit est exerce par au moins un profil', orphelins.length === 0,
+     orphelins.join(', '))
 
 const echecs = etapes.filter((e) => !e.ok)
 console.log(`\n=== ${etapes.length - echecs.length}/${etapes.length} vérifications réussies ===`)

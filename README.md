@@ -36,6 +36,10 @@ Elles viennent du brief et de la base; les contourner casse le modèle.
 - **Écrire par les fonctions métier** (`creer_vehicule`, `recevoir_vehicule`,
   `demarrer_feuille`, `completer_feuille`, …), jamais par un `insert` ou un
   `update` direct : ce sont elles qui portent les règles.
+- **Le statut d'un véhicule ne se saisit jamais.** Il découle d'un fait noté —
+  une vente, une livraison, une entrée au garage, un transfert — par trigger ou
+  par `deplacer_vehicule`. `changer_statut` n'est plus exécutable depuis
+  l'application, seulement par la clé service pour les corrections.
 - **Ne pas envoyer les champs d'auteur** (`cree_par`, `decide_par`,
   `derniere_modif_par`) : ils sont estampillés par trigger.
 - **Ne jamais créer ni résoudre une alerte à la main.** Modifier la donnée
@@ -74,6 +78,8 @@ docs/
 | 2 — Écran inspection (Catherine) | fait |
 | 3 — Écran approbation | fait |
 | 7 — Réglages admin | fait |
+| Accueil par rôle et files nommées | fait |
+| Pipeline de vente (statut = conséquence) | fait |
 | 8 — Tableaux de bord | à faire |
 
 Il reste les tableaux de bord (étape 8), à trancher entre Metabase branché sur

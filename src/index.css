@@ -1022,3 +1022,29 @@ body {
 .moyennes strong { color: var(--encre); font-variant-numeric: tabular-nums; }
 
 .compteur .etiquette { text-transform: none; }
+
+/* ---------- Mouvements et ventes ---------- */
+
+.mouvements { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.mouvements .bouton-secondaire { font-size: 0.85rem; padding: 0.5rem 0.85rem; }
+
+.vente.vendu     { border-left: 4px solid var(--avertissement); }
+.vente.approuve  { border-left: 4px solid var(--succes); }
+.vente.depot     { border-left: 4px solid var(--marque); }
+.vente.livre     { border-left: 4px solid var(--encre-douce); }
+
+.action-repliable summary {
+  list-style: none;
+  display: inline-block;
+  cursor: pointer;
+}
+.action-repliable summary::-webkit-details-marker { display: none; }
+
+.formulaire-court {
+  margin-top: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+  background: var(--fond);
+  max-width: 26rem;
+}

@@ -218,3 +218,35 @@ export type ChangementDecision = {
   change_le: string
   motif: string | null
 }
+
+export type EtatVente = 'depot' | 'vendu' | 'approuve' | 'livre' | 'annule'
+export type TypeTransaction = 'financement' | 'comptant' | 'location'
+export type ForceDossier = 'fort' | 'moyen' | 'faible'
+
+export type Vente = {
+  id: string
+  vehicule_id: string
+  no_stock: string
+  vehicule_titre: string
+  statut_vehicule: string | null
+  client: string
+  telephone: string | null
+  courriel: string | null
+  vendeur: string | null
+  vendeur_id: string | null
+  type_transaction: TypeTransaction
+  prix_vendu: number | null
+  etat: EtatVente
+  force_dossier: ForceDossier | null
+  fi: string | null
+  fi_le: string | null
+  date_livraison_prevue: string | null
+  livre_le: string | null
+  livre_par_nom: string | null
+  annule_le: string | null
+  motif_annulation: string | null
+  lien_crm: string | null
+  notes: string | null
+  cree_le: string
+  cree_par_nom: string | null
+}

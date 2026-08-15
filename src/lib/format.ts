@@ -106,3 +106,38 @@ export function decision(code: string | null | undefined): string {
   if (!code) return ABSENT
   return DECISIONS[code] ?? code
 }
+
+const ETATS_VENTE: Record<string, string> = {
+  depot: 'Dépôt reçu',
+  vendu: 'Vendu',
+  approuve: 'Approuvé',
+  livre: 'Livré',
+  annule: 'Annulée',
+}
+
+export function etatVente(code: string | null | undefined): string {
+  if (!code) return ABSENT
+  return ETATS_VENTE[code] ?? code
+}
+
+const FORCES: Record<string, string> = {
+  fort: 'Dossier fort',
+  moyen: 'Dossier moyen',
+  faible: 'Dossier faible',
+}
+
+export function forceDossier(code: string | null | undefined): string {
+  if (!code) return 'Dossier non qualifié'
+  return FORCES[code] ?? code
+}
+
+const TRANSACTIONS: Record<string, string> = {
+  financement: 'Financement',
+  comptant: 'Comptant',
+  location: 'Location',
+}
+
+export function transaction(code: string | null | undefined): string {
+  if (!code) return ABSENT
+  return TRANSACTIONS[code] ?? code
+}

@@ -8,8 +8,25 @@ import {
   texte, transmission as libelleTransmission, typeDocument,
 } from '../lib/format'
 import type {
-  Document, EquipementCoche, Jalon, Lead, Pneu, PrixHistorique, Statut, VehiculeApp,
+  Document, EquipementCoche, Jalon, Lead, Pneu, PrixHistorique, VehiculeApp,
 } from '../lib/types'
+
+/**
+ * Chaque bouton décrit un fait, pas un statut. Le statut en découle en base,
+ * ce qui rend impossible un véhicule « LIVRÉ » qui n'est jamais parti.
+ */
+const MOUVEMENTS: { code: string; libelle: string; confirmation: string }[] = [
+  { code: 'garage_interne', libelle: 'Entré au garage', confirmation: 'Véhicule au garage interne.' },
+  { code: 'mecanique_externe', libelle: 'Parti en mécanique externe', confirmation: 'Véhicule en mécanique externe.' },
+  { code: 'carrosserie', libelle: 'Parti en carrosserie', confirmation: 'Véhicule en carrosserie.' },
+  { code: 'saaq', libelle: 'Parti pour la SAAQ', confirmation: 'Véhicule parti pour l’inspection SAAQ.' },
+  { code: 'disponible', libelle: 'Prêt à vendre', confirmation: 'Véhicule disponible.' },
+  { code: 'terrebonne', libelle: 'Transféré à Terrebonne', confirmation: 'Véhicule transféré à Terrebonne.' },
+  { code: 'wholesale', libelle: 'Envoyé en wholesale', confirmation: 'Véhicule en wholesale.' },
+  { code: 'demo', libelle: 'Affecté en démo', confirmation: 'Véhicule affecté en démo.' },
+  { code: 'courtoisie', libelle: 'Affecté en courtoisie', confirmation: 'Véhicule affecté en courtoisie.' },
+  { code: 'vehicule_service', libelle: 'Affecté au service', confirmation: 'Véhicule affecté au service.' },
+]
 
 function Ligne({ etiquette, valeur }: { etiquette: string; valeur: string }) {
   return (
@@ -25,7 +42,6 @@ export function FicheVehicule() {
   const { aLeDroit } = useMoi()
 
   const [vehicule, setVehicule] = useState<VehiculeApp | null>(null)
-  const [statuts, setStatuts] = useState<Statut[]>([])
   const [equipements, setEquipements] = useState<EquipementCoche[]>([])
   const [pneus, setPneus] = useState<Pneu[]>([])
   const [documents, setDocuments] = useState<Document[]>([])
@@ -38,16 +54,14 @@ export function FicheVehicule() {
   const [succes, setSucces] = useState<string | null>(null)
   const [action, setAction] = useState<string | null>(null)
 
-  const [nouveauStatut, setNouveauStatut] = useState('')
   const [nouveauPrix, setNouveauPrix] = useState('')
 
   const charger = useCallback(async () => {
     if (!id) return
     setErreur(null)
 
-    const [v, st, eq, pn, doc, px, jl, ld] = await Promise.all([
+    const [v, eq, pn, doc, px, jl, ld] = await Promise.all([
       supabase.from('v_vehicule_app').select('*').eq('id', id).maybeSingle(),
-      supabase.from('statut_vehicule').select('id, nom, ordre').order('ordre'),
       supabase.from('v_feuille_equipements').select('equipement_id, equipement, categorie, coche')
         .eq('vehicule_id', id),
       supabase.from('vehicule_pneu').select('id, position, largeur, ratio, diametre, type_pneu, roues')
@@ -70,9 +84,7 @@ export function FicheVehicule() {
 
     const fiche = v.data as unknown as VehiculeApp
     setVehicule(fiche)
-    setNouveauStatut(fiche.statut ?? '')
     setNouveauPrix(fiche.prix_vente !== null ? String(fiche.prix_vente) : '')
-    setStatuts((st.data ?? []) as Statut[])
     setEquipements(((eq.data ?? []) as EquipementCoche[]).filter((e) => e.coche))
     setPneus((pn.data ?? []) as Pneu[])
     setDocuments((doc.data ?? []) as Document[])
@@ -155,30 +167,31 @@ export function FicheVehicule() {
       {peutModifier && (
         <section className="bloc">
           <h2>Actions</h2>
-          <div className="actions-fiche">
-            <label className="champ champ-inline">
-              <span>Statut</span>
-              <select value={nouveauStatut} onChange={(e) => setNouveauStatut(e.target.value)}>
-                {statuts.map((s) => (
-                  <option key={s.id} value={s.nom}>{s.nom}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className="bouton-secondaire"
-              disabled={action !== null || nouveauStatut === v.statut}
-              onClick={() =>
-                executer('statut',
-                  () => supabase.rpc('changer_statut', { p_vehicule: v.id, p_statut: nouveauStatut }),
-                  `Statut changé pour « ${nouveauStatut} ».`)
-              }
-            >
-              {action === 'statut' ? 'Enregistrement…' : 'Changer le statut'}
-            </button>
+          <p className="note sans-marge">
+            Le statut n’est pas modifiable directement : il découle de ce qui est noté.
+            Choisissez ce qui s’est passé, le statut suivra.
+          </p>
+
+          <div className="mouvements espace-haut">
+            {MOUVEMENTS.map((m) => (
+              <button
+                key={m.code}
+                type="button"
+                className="bouton-secondaire"
+                disabled={action !== null}
+                onClick={() =>
+                  executer(`mouv-${m.code}`,
+                    () => supabase.rpc('deplacer_vehicule',
+                      { p_vehicule: v.id, p_mouvement: m.code }),
+                    m.confirmation)
+                }
+              >
+                {m.libelle}
+              </button>
+            ))}
           </div>
 
-          <div className="actions-fiche">
+          <div className="actions-fiche espace-haut">
             <label className="champ champ-inline">
               <span>Prix de vente</span>
               <input

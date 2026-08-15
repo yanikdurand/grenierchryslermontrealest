@@ -42,6 +42,12 @@ export function MiseEnPage() {
               Service
             </NavLink>
           )}
+          {(aLeDroit('vente.enregistrer') || aLeDroit('vente.financement')
+            || aLeDroit('vente.livrer')) && (
+            <NavLink to="/ventes" className={({ isActive }) => (isActive ? 'actif' : '')}>
+              Ventes
+            </NavLink>
+          )}
           {(aLeDroit('admin.utilisateurs') || aLeDroit('admin.permissions')
             || aLeDroit('admin.notifications')) && (
             <NavLink to="/reglages" className={({ isActive }) => (isActive ? 'actif' : '')}>
