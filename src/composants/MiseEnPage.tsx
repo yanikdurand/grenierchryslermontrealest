@@ -42,6 +42,11 @@ export function MiseEnPage() {
               Service
             </NavLink>
           )}
+          {aLeDroit('rapport.voir') && (
+            <NavLink to="/parcours" className={({ isActive }) => (isActive ? 'actif' : '')}>
+              Parcours
+            </NavLink>
+          )}
           {(aLeDroit('vente.enregistrer') || aLeDroit('vente.financement')
             || aLeDroit('vente.livrer')) && (
             <NavLink to="/ventes" className={({ isActive }) => (isActive ? 'actif' : '')}>

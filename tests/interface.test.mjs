@@ -309,6 +309,19 @@ async function scenario(navigateur, cle) {
     if (chemin === '/rest/v1/crm_lead') return route.fulfill(json([]))
     if (chemin === '/rest/v1/v_vente_app') return route.fulfill(json(ventes))
     if (chemin === '/rest/v1/v_visite_app') return route.fulfill(json(visites))
+    if (chemin === '/rest/v1/v_goulots') {
+      return route.fulfill(json([
+        { no_stock: 'A1234', vehicule: '2021 HONDA ACCORD', statut: 'VÉHICULE REÇU',
+          etape_bloquante: "En attente de feuille d'équipements", jours_a_cette_etape: 12 },
+        { no_stock: 'B5678', vehicule: '2020 RAM 1500', statut: 'DISPONIBLE',
+          etape_bloquante: "En attente de feuille d'équipements", jours_a_cette_etape: 300 },
+      ]))
+    }
+    if (chemin === '/rest/v1/v_delai_mise_en_marche') {
+      return route.fulfill(json([{ no_stock: 'A1234', jours_achat_reception: 2,
+        jours_reception_feuille: 5, jours_feuille_service: 1,
+        jours_service_en_ligne: 3, jours_total: 11 }]))
+    }
     if (chemin === '/rest/v1/lead_showroom') {
       if (methode === 'POST') {
         const corps = JSON.parse(req.postData() || '{}')
@@ -694,6 +707,33 @@ async function scenario(navigateur, cle) {
     }
 
     await page.screenshot({ path: `apercu-ventes-${cle}.png`, fullPage: true })
+  }
+
+  // --- Parcours : où les véhicules bloquent ---
+  const voitParcours = profil.droits.includes('rapport.voir')
+  note(`${prefixe} — onglet Parcours ${voitParcours ? 'visible' : 'masqué'}`,
+       ((await page.locator('nav a:has-text("Parcours")').count()) === 1) === voitParcours)
+
+  if (voitParcours) {
+    await page.click('nav a:has-text("Parcours")')
+    await page.waitForSelector('.fiche-grille', { timeout: 15000 })
+    note(`${prefixe} — délais moyens affichés`,
+         (await page.locator('.page').textContent())?.includes('Achat → réception'))
+
+    // Par défaut, seuls les véhicules encore en préparation
+    note(`${prefixe} — les disponibles sont masqués par défaut`,
+         (await page.locator('.tableau tbody tr').count()) === 1)
+    note(`${prefixe} — le masquage est expliqué, pas silencieux`,
+         (await page.locator('.page').textContent())?.includes('remplie dans Airtable'))
+
+    await page.locator('.case:has-text("déjà disponibles") input').check()
+    await page.waitForTimeout(400)
+    note(`${prefixe} — les disponibles réapparaissent sur demande`,
+         (await page.locator('.tableau tbody tr').count()) === 2)
+    note(`${prefixe} — le blocage ancien est signalé en rouge`,
+         (await page.locator('.jours-alerte').count()) === 2)
+
+    await page.screenshot({ path: `apercu-parcours-${cle}.png`, fullPage: true })
   }
 
   // --- Visites du jour (phone-up / walk-in) ---

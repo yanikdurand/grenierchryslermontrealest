@@ -1048,3 +1048,15 @@ body {
   background: var(--fond);
   max-width: 26rem;
 }
+
+/* ---------- Parcours ---------- */
+
+.compte-etape {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--encre-douce);
+  margin-top: 0.2rem;
+}
+
+.jours-alerte { color: var(--alerte); font-weight: 700; }
