@@ -4,11 +4,16 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { messageErreur } from '../lib/erreurs'
 import { useMoi } from '../auth/MoiContexte'
+import { decoderVin } from '../lib/nhtsa'
+import { chargerMarques, chargerModeles } from '../lib/referentielVehicules'
 import type { Fournisseur, TypeDocument } from '../lib/types'
 
 const ECHANGE_CLIENT = 'Échange client'
 const FOURNISSEUR_AUTRE = 'Autres'
 const LONGUEUR_VIN = 17
+
+/** Valeur sentinelle des menus déroulants qui bascule vers la saisie libre. */
+const VALEUR_AUTRE = '__autre__'
 
 type Televersement = { fichier: File; type: TypeDocument }
 
@@ -40,7 +45,9 @@ export function Acquisition() {
   const [noStock, setNoStock] = useState('')
   const [vin, setVin] = useState('')
   const [marque, setMarque] = useState('')
+  const [marqueAutre, setMarqueAutre] = useState('')
   const [modele, setModele] = useState('')
+  const [modeleAutre, setModeleAutre] = useState('')
   const [annee, setAnnee] = useState('')
   const [prixAchat, setPrixAchat] = useState('')
   const [lienCarfax, setLienCarfax] = useState('')
@@ -70,6 +77,93 @@ export function Acquisition() {
   const [avertissement, setAvertissement] = useState<string | null>(null)
   const [envoi, setEnvoi] = useState(false)
 
+  // Marque et modèle en menu déroulant, sur le modèle des sites de listing.
+  const [marques, setMarques] = useState<string[]>([])
+  const [modeles, setModeles] = useState<string[]>([])
+  const [chargementModeles, setChargementModeles] = useState(false)
+
+  // Décodage VIN — se déclenche seul dès que le VIN est valide.
+  const [decodage, setDecodage] = useState<'inactif' | 'encours' | 'succes' | 'echec'>('inactif')
+  const [decodageMessage, setDecodageMessage] = useState<string | null>(null)
+  const [dernierVinDecode, setDernierVinDecode] = useState('')
+
+  const marqueEffective = marque === VALEUR_AUTRE ? marqueAutre.trim() : marque
+  const modeleEffectif = modele === VALEUR_AUTRE ? modeleAutre.trim() : modele
+
+  useEffect(() => {
+    chargerMarques()
+      .then(setMarques)
+      .catch(() => setMarques([])) // Le menu reste utilisable via « Autre » si NHTSA est injoignable.
+  }, [])
+
+  // Le modèle dépend de la marque et de l'année : impossible de filtrer sans les deux.
+  useEffect(() => {
+    const anneeNombre = Number(annee)
+    if (!marqueEffective || marque === VALEUR_AUTRE || !anneeNombre || anneeNombre < 1900) {
+      setModeles([])
+      return
+    }
+    let annule = false
+    setChargementModeles(true)
+    chargerModeles(marqueEffective, anneeNombre)
+      .then((liste) => { if (!annule) setModeles(liste) })
+      .catch(() => { if (!annule) setModeles([]) })
+      .finally(() => { if (!annule) setChargementModeles(false) })
+    return () => { annule = true }
+  }, [marqueEffective, marque, annee])
+
+  /**
+   * Décodage automatique dès que le VIN est valide — la réception saisit un
+   * VIN à la fois et veut voir la marque apparaître sans clic supplémentaire.
+   * Un débounce de 400 ms évite de décoder à chaque frappe pendant qu'on
+   * termine de le taper ou de le coller.
+   */
+  useEffect(() => {
+    const propre = vin.trim().toUpperCase()
+    if (propre.length !== LONGUEUR_VIN || vinInvalide(propre) || propre === dernierVinDecode) return
+
+    const delai = setTimeout(async () => {
+      setDecodage('encours')
+      setDecodageMessage(null)
+      try {
+        const d = await decoderVin(propre)
+        setDernierVinDecode(propre)
+
+        // Fonctionnel plutôt que via la variable fermée : le décodage prend
+        // près d'une seconde, largement le temps de commencer à taper
+        // ailleurs dans le formulaire pendant qu'il tourne.
+        const marqueDecodee = d.marque?.toUpperCase() ?? null
+        if (marqueDecodee) setMarque((m) => m || marqueDecodee)
+        if (d.annee) setAnnee((a) => a || String(d.annee))
+        if (d.trim) setTrim((t) => t || d.trim!)
+
+        // Le modèle rejoint le menu NHTSA s'il s'y trouve, sinon la saisie
+        // libre — on connaît déjà marque et année, pas la peine d'attendre
+        // que l'effet de cascade les rattrape.
+        if (d.modele && marqueDecodee && d.annee) {
+          const modeleDecode = d.modele.toUpperCase()
+          const liste = await chargerModeles(marqueDecodee, d.annee).catch((): string[] => [])
+          setModele((m) => {
+            if (m) return m
+            if (liste.includes(modeleDecode)) return modeleDecode
+            setModeleAutre(modeleDecode)
+            return VALEUR_AUTRE
+          })
+        }
+
+        setDecodage('succes')
+        setDecodageMessage(
+          [d.annee, d.marque, d.modele].filter(Boolean).join(' ') || 'VIN décodé.'
+        )
+      } catch (e) {
+        setDecodage('echec')
+        setDecodageMessage(e instanceof Error ? e.message : 'Le décodage a échoué.')
+      }
+    }, 400)
+
+    return () => clearTimeout(delai)
+  }, [vin, dernierVinDecode])
+
   useEffect(() => {
     supabase
       .from('fournisseur')
@@ -91,7 +185,7 @@ export function Acquisition() {
   const saaqRequisPourFormulaire = immatriculation !== null
 
   const pretAEnvoyer = useMemo(() => {
-    if (!noStock.trim() || !marque.trim() || !modele.trim()) return false
+    if (!noStock.trim() || !marqueEffective || !modeleEffectif) return false
     if (vinInvalide(vin)) return false
     if (!annee || !prixAchat || !lienCarfax.trim()) return false
     if (!fournisseur) return false
@@ -100,9 +194,23 @@ export function Acquisition() {
     if (saaqRequisPourFormulaire && requiertSaaq === '') return false
     return true
   }, [
-    noStock, marque, modele, vin, annee, prixAchat, lienCarfax,
+    noStock, marqueEffective, modeleEffectif, vin, annee, prixAchat, lienCarfax,
     fournisseur, fournisseurAutre, justificatif, saaqRequisPourFormulaire, requiertSaaq,
   ])
+
+  // Si le décodage ou une saisie précédente propose une valeur hors liste
+  // NHTSA, elle reste visible dans le menu plutôt que de disparaître.
+  const optionsMarque = useMemo(() => {
+    const s = new Set(marques)
+    if (marque && marque !== VALEUR_AUTRE) s.add(marque)
+    return [...s].sort((a, b) => a.localeCompare(b, 'fr'))
+  }, [marques, marque])
+
+  const optionsModele = useMemo(() => {
+    const s = new Set(modeles)
+    if (modele && modele !== VALEUR_AUTRE) s.add(modele)
+    return [...s].sort((a, b) => a.localeCompare(b, 'fr'))
+  }, [modeles, modele])
 
   async function televerser(vehiculeId: string, envois: Televersement[]): Promise<string[]> {
     const echecs: string[] = []
@@ -156,8 +264,8 @@ export function Acquisition() {
     const { data: vehiculeId, error } = await supabase.rpc('creer_vehicule', {
       p_no_stock: noStock.trim(),
       p_vin: vin.trim().toUpperCase(),
-      p_marque: marque.trim(),
-      p_modele: modele.trim(),
+      p_marque: marqueEffective,
+      p_modele: modeleEffectif,
       p_annee: Number(annee),
       p_prix_achat: Number(prixAchat),
       p_lien_carfax: lienCarfax.trim(),
@@ -220,7 +328,7 @@ export function Acquisition() {
               <span>VIN <em>obligatoire — 17 caractères</em></span>
               <input
                 value={vin}
-                onChange={(e) => setVin(e.target.value.toUpperCase())}
+                onChange={(e) => { setVin(e.target.value.toUpperCase()); setDecodage('inactif') }}
                 maxLength={LONGUEUR_VIN}
                 required
                 spellCheck={false}
@@ -228,16 +336,20 @@ export function Acquisition() {
               {vin.length > 0 && vinInvalide(vin) && (
                 <small className="indice-erreur">{vinInvalide(vin)}</small>
               )}
-            </label>
-
-            <label className="champ">
-              <span>Marque <em>obligatoire</em></span>
-              <input value={marque} onChange={(e) => setMarque(e.target.value)} required />
-            </label>
-
-            <label className="champ">
-              <span>Modèle <em>obligatoire</em></span>
-              <input value={modele} onChange={(e) => setModele(e.target.value)} required />
+              {decodage === 'encours' && <small>Décodage du VIN…</small>}
+              {decodage === 'succes' && (
+                <small>
+                  Décodé : {decodageMessage} — marque, modèle et année pré-remplis, à vérifier.
+                </small>
+              )}
+              {decodage === 'echec' && (
+                <small className="indice-erreur">
+                  {decodageMessage} <button
+                    type="button" className="bouton-discret"
+                    onClick={() => setDernierVinDecode('')}
+                  >Réessayer</button>
+                </small>
+              )}
             </label>
 
             <label className="champ">
@@ -250,11 +362,71 @@ export function Acquisition() {
                 max={new Date().getFullYear() + 2}
                 required
               />
+              <small>Choisie avant la marque : le modèle en dépend, comme sur AutoTrader.</small>
+            </label>
+
+            <label className="champ">
+              <span>Marque <em>obligatoire</em></span>
+              <select
+                value={marque}
+                onChange={(e) => { setMarque(e.target.value); setModele('') }}
+                required
+              >
+                <option value="">Choisir…</option>
+                {optionsMarque.map((m) => <option key={m} value={m}>{m}</option>)}
+                <option value={VALEUR_AUTRE}>Autre — préciser…</option>
+              </select>
+              {marque === VALEUR_AUTRE && (
+                <input
+                  className="espace-haut"
+                  value={marqueAutre}
+                  onChange={(e) => setMarqueAutre(e.target.value.toUpperCase())}
+                  placeholder="Marque"
+                  required
+                  autoFocus
+                />
+              )}
+            </label>
+
+            <label className="champ">
+              <span>Modèle <em>obligatoire</em></span>
+              <select
+                value={modele}
+                onChange={(e) => setModele(e.target.value)}
+                disabled={!marqueEffective || marque === VALEUR_AUTRE}
+                required
+              >
+                <option value="">
+                  {!marqueEffective || marque === VALEUR_AUTRE
+                    ? 'Choisir la marque…'
+                    : !annee ? 'Choisir l’année…'
+                    : chargementModeles ? 'Chargement…' : 'Choisir…'}
+                </option>
+                {optionsModele.map((m) => <option key={m} value={m}>{m}</option>)}
+                <option value={VALEUR_AUTRE}>Autre — préciser…</option>
+              </select>
+              {marque === VALEUR_AUTRE && (
+                <small>Le modèle passe en saisie libre — marque hors liste NHTSA.</small>
+              )}
+              {modele === VALEUR_AUTRE && (
+                <input
+                  className="espace-haut"
+                  value={modeleAutre}
+                  onChange={(e) => setModeleAutre(e.target.value.toUpperCase())}
+                  placeholder="Modèle"
+                  required
+                  autoFocus
+                />
+              )}
             </label>
 
             <label className="champ">
               <span>Version <em>optionnel</em></span>
               <input value={trim} onChange={(e) => setTrim(e.target.value)} />
+              <small>
+                Suggérée par le décodage du VIN quand disponible — un VIN n’encode qu’une
+                seule version, à corriger au besoin.
+              </small>
             </label>
 
             <label className="champ">

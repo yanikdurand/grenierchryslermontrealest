@@ -13,6 +13,12 @@ export type VinDecode = {
   marque: string | null
   modele: string | null
   annee: number | null
+  /**
+   * Une suggestion, pas un choix parmi plusieurs : un VIN nord-américain
+   * n'encode qu'une seule version, donc NHTSA n'en propose jamais une liste.
+   * À valider et corriger au besoin — voir `src/lib/referentielVehicules.ts`.
+   */
+  trim: string | null
   carrosserie: string | null
   motricite: string | null
   transmission: string | null
@@ -91,6 +97,8 @@ export async function decoderVin(vin: string): Promise<VinDecode> {
     marque,
     modele: propre(r.Model),
     annee: entier(r.ModelYear),
+    // Certains VIN portent l'information dans Series plutôt que Trim.
+    trim: propre(r.Trim) ?? propre(r.Series),
     carrosserie: propre(r.BodyClass),
     motricite: versMotricite(propre(r.DriveType)),
     transmission: versTransmission(propre(r.TransmissionStyle)),
