@@ -486,7 +486,7 @@ async function scenario(navigateur, cle) {
   await page.locator('input[type=password]').nth(0).fill(profil.motDePasse)
   await page.locator('input[type=password]').nth(1).fill(profil.motDePasse)
   await page.click('button[type=submit]')
-  await page.waitForSelector('.entete', { timeout: 15000 })
+  await page.waitForSelector('.lateral', { timeout: 15000 })
   note(`${prefixe} — connexion et mot de passe changé`, true)
 
   // Navigation pilotée par les permissions
@@ -508,7 +508,7 @@ async function scenario(navigateur, cle) {
        attenduTaches ? nbTaches > 0 : true)
 
   // Inventaire : compteurs et liste
-  await page.click('nav a:has-text("Inventaire")')
+  await page.click('nav a:has-text("Véhicules")')
   await page.waitForSelector('.liste-vehicules', { timeout: 15000 })
   const compteurs = await page.locator('.compteur .etiquette').allTextContents()
   note(`${prefixe} — files nommées présentes`, compteurs.length >= 3, compteurs.join(' · '))
