@@ -400,10 +400,25 @@ async function scenario(navigateur, cle) {
   note(`${prefixe} — lien d'acquisition ${peutCreer ? 'visible' : 'masqué'}`,
        (lienAcquisition === 1) === peutCreer)
 
+  // Accueil : chacun voit ce qui le concerne
+  await page.waitForSelector('.page', { timeout: 15000 })
+  note(`${prefixe} — accueil personnalisé affiché`,
+       (await page.locator('h1.titre-page').textContent())?.includes('Bonjour'))
+
+  const attenduTaches = ['vehicule.recevoir', 'feuille.saisir', 'inspection.saisir',
+                         'inspection.approuver', 'inspection.completer', 'saaq.completer']
+    .some((d) => profil.droits.includes(d))
+  const nbTaches = await page.locator('.tache').count()
+  note(`${prefixe} — tâches ${attenduTaches ? 'proposées' : 'aucune (rôle sans action)'}`,
+       attenduTaches ? nbTaches > 0 : true)
+
   // Inventaire : compteurs et liste
+  await page.click('nav a:has-text("Inventaire")')
   await page.waitForSelector('.liste-vehicules', { timeout: 15000 })
-  const compteurs = await page.locator('.compteur .chiffre').allTextContents()
-  note(`${prefixe} — compteurs de l'inventaire`, compteurs.length === 3, compteurs.join(' / '))
+  const compteurs = await page.locator('.compteur .etiquette').allTextContents()
+  note(`${prefixe} — files nommées présentes`, compteurs.length >= 3, compteurs.join(' · '))
+  note(`${prefixe} — bandeau des moyennes affiché`,
+       (await page.locator('.moyennes').count()) === 1)
 
   const detailsListe = await page.locator('.vehicule-details').first().textContent()
   const prixAchatAttendu = profil.masque.prix_achat !== null
@@ -411,10 +426,12 @@ async function scenario(navigateur, cle) {
        detailsListe.includes('Prix d’achat') === prixAchatAttendu)
 
   // Filtre par alerte critique
-  await page.locator('.compteur.alerte').click()
-  await page.waitForTimeout(300)
-  note(`${prefixe} — filtre « alerte critique »`,
+  await page.locator('.compteur.alerte').first().click()
+  await page.waitForTimeout(400)
+  note(`${prefixe} — filtre « alerte critique » appliqué`,
        (await page.locator('.vehicule').count()) === 1)
+  note(`${prefixe} — le filtre est dans l'URL, donc partageable`,
+       page.url().includes('critiques=1'), page.url().split('?')[1] ?? '')
 
   // La fiche doit s'annoncer : le numéro de stock est un lien visible, et
   // chaque carte porte une action explicite. Sans elle, l'écran paraît en

@@ -25,6 +25,9 @@ export function MiseEnPage() {
         </div>
 
         <nav className="navigation">
+          <NavLink to="/" end className={({ isActive }) => (isActive ? 'actif' : '')}>
+            Accueil
+          </NavLink>
           {aLeDroit('vehicule.creer') && (
             <NavLink to="/acquisition" className={({ isActive }) => (isActive ? 'actif' : '')}>
               Nouvelle acquisition

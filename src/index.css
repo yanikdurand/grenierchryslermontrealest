@@ -973,3 +973,52 @@ body {
   color: var(--encre-douce);
   font-weight: 400;
 }
+
+/* ---------- Accueil ---------- */
+
+.taches { list-style: none; margin: 0 0 1.5rem; padding: 0; display: grid; gap: 0.75rem; }
+
+.tache {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--trait);
+  border-left: 4px solid var(--marque);
+  border-radius: var(--rayon);
+  padding: 1rem 1.1rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.tache:hover { border-color: var(--marque-vive); border-left-color: var(--marque-vive); }
+.tache.urgente { border-left-color: var(--alerte); }
+
+.tache-compte {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 2.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.tache.urgente .tache-compte { color: var(--alerte); }
+
+.tache-corps { display: flex; flex-direction: column; gap: 0.15rem; }
+.tache-titre { font-weight: 600; }
+.tache-detail { font-size: 0.85rem; color: var(--encre-douce); line-height: 1.4; }
+
+/* Bandeau des moyennes, sur le modèle du tableau de bord Airtable. */
+.moyennes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.85rem;
+  color: var(--encre-douce);
+}
+
+.moyennes strong { color: var(--encre); font-variant-numeric: tabular-nums; }
+
+.compteur .etiquette { text-transform: none; }

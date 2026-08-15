@@ -10,6 +10,7 @@ import { FeuilleEquipements } from './pages/FeuilleEquipements'
 import { Service } from './pages/Service'
 import { Inspection } from './pages/Inspection'
 import { Reglages } from './pages/Reglages'
+import { Accueil } from './pages/Accueil'
 
 /** Écran affiché quand un compte Auth n'a pas de ligne `utilisateur` liée. */
 function CompteNonLie() {
@@ -67,6 +68,7 @@ function Routage() {
   return (
     <Routes>
       <Route element={<MiseEnPage />}>
+        <Route path="/" element={<Accueil />} />
         <Route path="/inventaire" element={<Inventaire />} />
         <Route path="/vehicule/:id" element={<FicheVehicule />} />
         <Route path="/vehicule/:id/feuille" element={<FeuilleEquipements />} />
@@ -75,9 +77,9 @@ function Routage() {
         <Route path="/reglages" element={<Reglages />} />
         <Route
           path="/acquisition"
-          element={aLeDroit('vehicule.creer') ? <Acquisition /> : <Navigate to="/inventaire" replace />}
+          element={aLeDroit('vehicule.creer') ? <Acquisition /> : <Navigate to="/" replace />}
         />
-        <Route path="*" element={<Navigate to="/inventaire" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
   )

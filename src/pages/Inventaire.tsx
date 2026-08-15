@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { messageErreur } from '../lib/erreurs'
 import { useMoi } from '../auth/MoiContexte'
@@ -29,9 +29,21 @@ export function Inventaire() {
   const [erreur, setErreur] = useState<string | null>(null)
   const [enCours, setEnCours] = useState<string | null>(null)
 
+  // Les filtres vivent dans l'URL : l'accueil peut donc pointer droit sur une
+  // file, et un lien se partage ou se met en favori.
+  const [params, setParams] = useSearchParams()
   const [recherche, setRecherche] = useState('')
-  const [statutChoisi, setStatutChoisi] = useState('')
-  const [critiquesSeulement, setCritiquesSeulement] = useState(false)
+  const statutChoisi = params.get('statut') ?? ''
+  const critiquesSeulement = params.get('critiques') === '1'
+  const saaqSeulement = params.get('saaq') === '1'
+
+  function filtrer(suivant: { statut?: string; critiques?: boolean; saaq?: boolean }) {
+    const p = new URLSearchParams()
+    if (suivant.statut) p.set('statut', suivant.statut)
+    if (suivant.critiques) p.set('critiques', '1')
+    if (suivant.saaq) p.set('saaq', '1')
+    setParams(p, { replace: true })
+  }
 
   const charger = useCallback(async () => {
     setErreur(null)
@@ -80,6 +92,7 @@ export function Inventaire() {
     return vehicules.filter((v) => {
       if (statutChoisi && v.statut !== statutChoisi) return false
       if (critiquesSeulement && v.nb_critiques === 0) return false
+      if (saaqSeulement && !(v.requiert_inspection_saaq && !v.saaq_complete_le)) return false
       if (!terme) return true
       return (
         v.no_stock?.toUpperCase().includes(terme) ||
@@ -87,16 +100,52 @@ export function Inventaire() {
         v.vehicule_titre?.toUpperCase().includes(terme)
       )
     })
-  }, [vehicules, recherche, statutChoisi, critiquesSeulement])
+  }, [vehicules, recherche, statutChoisi, critiquesSeulement, saaqSeulement])
 
-  const totaux = useMemo(
-    () => ({
-      total: vehicules.length,
-      critiques: vehicules.filter((v) => v.nb_critiques > 0).length,
-      aRecevoir: vehicules.filter((v) => v.statut === ATTENTE_RECEPTION).length,
-    }),
-    [vehicules]
-  )
+  /**
+   * Files nommées plutôt que filtres à reconstruire, sur le modèle des pages
+   * Airtable que l'équipe utilise déjà. Chaque compteur est une destination.
+   */
+  const files = useMemo(() => {
+    const parStatut = (nom: string) => vehicules.filter((v) => v.statut === nom).length
+    const base = [
+      { cle: 'tous', libelle: 'Tous', compte: vehicules.length,
+        actif: !statutChoisi && !critiquesSeulement && !saaqSeulement,
+        aller: () => filtrer({}) },
+      { cle: 'critiques', libelle: 'Alertes critiques',
+        compte: vehicules.filter((v) => v.nb_critiques > 0).length,
+        alerte: true, actif: critiquesSeulement, aller: () => filtrer({ critiques: true }) },
+      { cle: 'saaq', libelle: 'SAAQ à faire',
+        compte: vehicules.filter((v) => v.requiert_inspection_saaq && !v.saaq_complete_le).length,
+        alerte: true, actif: saaqSeulement, aller: () => filtrer({ saaq: true }) },
+    ]
+    // Les statuts que l'équipe suit au quotidien dans Airtable.
+    const suivis = [ATTENTE_RECEPTION, 'VÉHICULE REÇU', 'DISPONIBLE', 'DÉPÔT RÉSERVÉ',
+                    'ATT. LIVRAISON', 'WHOLESALE', 'DÉMO', 'COURTOISIE']
+    for (const nom of suivis) {
+      const compte = parStatut(nom)
+      if (compte === 0 && statutChoisi !== nom) continue
+      base.push({
+        cle: nom, libelle: nom, compte,
+        actif: statutChoisi === nom, aller: () => filtrer({ statut: nom }),
+      })
+    }
+    return base
+  }, [vehicules, statutChoisi, critiquesSeulement, saaqSeulement])
+
+  /** Moyennes suivies sur le tableau de bord Airtable. */
+  const moyennes = useMemo(() => {
+    const moy = (vals: (number | null)[]) => {
+      const n = vals.filter((v): v is number => v !== null && v !== undefined)
+      return n.length ? Math.round(n.reduce((a, b) => a + b, 0) / n.length) : null
+    }
+    return {
+      jours: moy(vehicules.map((v) => v.jours_inventaire)),
+      prix: moy(vehicules.map((v) => v.prix_vente)),
+      km: moy(vehicules.map((v) => v.km)),
+      profit: moy(vehicules.map((v) => v.profit)),
+    }
+  }, [vehicules])
 
   const peutRecevoir = aLeDroit('vehicule.recevoir')
 
@@ -120,39 +169,26 @@ export function Inventaire() {
       )}
 
       <div className="compteurs">
-        <button
-          type="button"
-          className={`compteur ${!statutChoisi && !critiquesSeulement ? 'actif' : ''}`}
-          onClick={() => {
-            setStatutChoisi('')
-            setCritiquesSeulement(false)
-          }}
-        >
-          <span className="chiffre">{totaux.total}</span>
-          <span className="etiquette">véhicules</span>
-        </button>
-        <button
-          type="button"
-          className={`compteur alerte ${critiquesSeulement ? 'actif' : ''}`}
-          onClick={() => {
-            setCritiquesSeulement(true)
-            setStatutChoisi('')
-          }}
-        >
-          <span className="chiffre">{totaux.critiques}</span>
-          <span className="etiquette">avec alerte critique</span>
-        </button>
-        <button
-          type="button"
-          className={`compteur ${statutChoisi === ATTENTE_RECEPTION ? 'actif' : ''}`}
-          onClick={() => {
-            setStatutChoisi(ATTENTE_RECEPTION)
-            setCritiquesSeulement(false)
-          }}
-        >
-          <span className="chiffre">{totaux.aRecevoir}</span>
-          <span className="etiquette">à recevoir</span>
-        </button>
+        {files.map((f) => (
+          <button
+            key={f.cle}
+            type="button"
+            className={`compteur ${f.alerte ? 'alerte' : ''} ${f.actif ? 'actif' : ''}`}
+            onClick={f.aller}
+          >
+            <span className="chiffre">{f.compte}</span>
+            <span className="etiquette">{f.libelle}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="moyennes">
+        <span><strong>{nombre(moyennes.jours)}</strong> jours en moyenne</span>
+        <span><strong>{argent(moyennes.prix)}</strong> prix de vente moyen</span>
+        <span><strong>{nombre(moyennes.km)}</strong> km en moyenne</span>
+        {moyennes.profit !== null && (
+          <span><strong>{argent(moyennes.profit)}</strong> profit moyen</span>
+        )}
       </div>
 
       <div className="barre-outils">
@@ -165,7 +201,7 @@ export function Inventaire() {
         <select
           className="filtre"
           value={statutChoisi}
-          onChange={(e) => setStatutChoisi(e.target.value)}
+          onChange={(e) => filtrer({ statut: e.target.value })}
         >
           <option value="">Tous les statuts</option>
           {statuts.map((s) => (
