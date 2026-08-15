@@ -51,12 +51,20 @@ type SansLead = {
   photos: number | null
 }
 
+/**
+ * `ton` gradue au lieu d'alarmer. Auparavant tout ce qui méritait un regard
+ * était rouge — vieillissants, hors ligne, sans photo, sans VIN — et à sept
+ * chiffres rouges sur un écran, plus aucun ne se distingue. Le rouge est
+ * maintenant réservé à ce qui bloque une vente.
+ */
+type Ton = 'critique' | 'attente' | 'disponible'
+
 function Chiffre(
-  { valeur, libelle, alerte, exact }:
-  { valeur: string; libelle: string; alerte?: boolean; exact?: string }
+  { valeur, libelle, ton, exact }:
+  { valeur: string; libelle: string; ton?: Ton; exact?: string }
 ) {
   return (
-    <div className={`compteur ${alerte ? 'alerte' : ''}`} title={exact}>
+    <div className={`compteur ${ton ? `ton-${ton}` : ''}`} title={exact}>
       <span className="chiffre">{valeur}</span>
       <span className="etiquette">{libelle}</span>
     </div>
@@ -154,7 +162,7 @@ export function TableauxDeBord() {
           <h2>Stock</h2>
           <div className="compteurs">
             <Chiffre valeur={nombre(stock.vehicules_en_stock)} libelle="En stock" />
-            <Chiffre valeur={nombre(stock.vieillissants)} libelle="Vieillissants" alerte />
+            <Chiffre valeur={nombre(stock.vieillissants)} libelle="Vieillissants" ton="attente" />
             <Chiffre valeur={nombre(stock.age_moyen)} libelle="Âge moyen (j)" />
             <Chiffre valeur={nombre(stock.age_median)} libelle="Âge médian (j)" />
             {stock.capital_immobilise !== null && (
@@ -164,8 +172,8 @@ export function TableauxDeBord() {
                 exact={argent(stock.capital_immobilise)}
               />
             )}
-            <Chiffre valeur={nombre(stock.non_affiches)} libelle="Non affichés" alerte />
-            <Chiffre valeur={nombre(stock.sans_vin)} libelle="Sans VIN" alerte />
+            <Chiffre valeur={nombre(stock.non_affiches)} libelle="Non affichés" ton="attente" />
+            <Chiffre valeur={nombre(stock.sans_vin)} libelle="Sans VIN" ton="critique" />
           </div>
         </section>
       )}
@@ -174,9 +182,9 @@ export function TableauxDeBord() {
         <section className="bloc">
           <h2>Affichage web</h2>
           <div className="compteurs">
-            <Chiffre valeur={nombre(affichage.en_ligne)} libelle="En ligne" />
-            <Chiffre valeur={nombre(affichage.hors_ligne)} libelle="Hors ligne" alerte />
-            <Chiffre valeur={nombre(affichage.affiches_sans_photo)} libelle="Sans photo" alerte />
+            <Chiffre valeur={nombre(affichage.en_ligne)} libelle="En ligne" ton="disponible" />
+            <Chiffre valeur={nombre(affichage.hors_ligne)} libelle="Hors ligne" ton="attente" />
+            <Chiffre valeur={nombre(affichage.affiches_sans_photo)} libelle="Sans photo" ton="attente" />
             <Chiffre valeur={nombre(affichage.affiches_moins_10_photos)} libelle="Moins de 10 photos" />
             <Chiffre valeur={nombre(affichage.photos_moyennes)} libelle="Photos en moyenne" />
             <Chiffre
@@ -193,7 +201,7 @@ export function TableauxDeBord() {
       <section className="bloc">
         <h2>Ventes</h2>
         <div className="compteurs">
-          <Chiffre valeur={nombre(resumeVentes.nb)} libelle="Véhicules vendus" />
+          <Chiffre valeur={nombre(resumeVentes.nb)} libelle="Véhicules vendus" ton="disponible" />
           <Chiffre valeur={argent(resumeVentes.prixMoyen)} libelle="Prix de vente moyen" />
           {voitProfit && (
             <>

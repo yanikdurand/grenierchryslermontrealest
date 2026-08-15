@@ -7,6 +7,7 @@ import { useMoi } from '../auth/MoiContexte'
 import {
   argent, date, dateCourte, etatVente, forceDossier, texte, transaction,
 } from '../lib/format'
+import { classeEtatVente } from '../lib/statuts'
 import type { Utilisateur, VehiculeApp, Vente } from '../lib/types'
 
 /** Les états vivants du pipeline, dans l'ordre où ils se succèdent. */
@@ -97,7 +98,7 @@ export function Ventes() {
     <li key={v.id} className={`vehicule vente ${v.etat}`}>
       <div className="vehicule-entete">
         <Link to={`/vehicule/${v.vehicule_id}`} className="no-stock lien-stock">{v.no_stock}</Link>
-        <span className="statut">{etatVente(v.etat)}</span>
+        <span className={classeEtatVente(v.etat)}>{etatVente(v.etat)}</span>
       </div>
       <div className="vehicule-titre">{v.vehicule_titre} · {v.client}</div>
 
@@ -223,8 +224,10 @@ export function Ventes() {
       {succes && <p className="bandeau-succes">{succes}</p>}
 
       <div className="compteurs">
+        {/* Un dossier en cours est engagé auprès d'un client : même violet que
+            la pastille du véhicule. Livré est clos, donc neutre. */}
         {ETAPES.map((e) => (
-          <div key={e.etat} className="compteur">
+          <div key={e.etat} className="compteur ton-vente">
             <span className="chiffre">{ventes.filter((v) => v.etat === e.etat).length}</span>
             <span className="etiquette">{e.titre}</span>
           </div>

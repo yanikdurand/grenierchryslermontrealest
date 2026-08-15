@@ -158,7 +158,8 @@ export function Visites() {
           <span className="etiquette">Phone-up</span></div>
         <div className="compteur"><span className="chiffre">{rapport.walkIn}</span>
           <span className="etiquette">Walk-in</span></div>
-        <div className="compteur"><span className="chiffre">{rapport.vendus}</span>
+        {/* Le seul chiffre de la journée qui soit un résultat, pas un volume. */}
+        <div className="compteur ton-disponible"><span className="chiffre">{rapport.vendus}</span>
           <span className="etiquette">Vendus</span></div>
       </div>
 

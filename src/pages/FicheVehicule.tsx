@@ -7,6 +7,7 @@ import {
   annee as libelleAnnee, argent, date, dateCourte, jalon as libelleJalon, nombre, ouiNon, poids,
   texte, transmission as libelleTransmission, typeDocument,
 } from '../lib/format'
+import { classeStatut } from '../lib/statuts'
 import type {
   Document, EquipementCoche, Jalon, Lead, Pneu, PrixHistorique, VehiculeApp,
 } from '../lib/types'
@@ -155,7 +156,7 @@ export function FicheVehicule() {
           <h1 className="titre-page">{v.no_stock}</h1>
           <p className="fiche-titre">{v.vehicule_titre}</p>
         </div>
-        <span className="statut gros">{v.statut}</span>
+        <span className={`${classeStatut(v.statut)} gros`}>{v.statut}</span>
       </header>
 
       {v.alertes && (

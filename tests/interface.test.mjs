@@ -524,7 +524,9 @@ async function scenario(navigateur, cle) {
        detailsListe.includes('Prix d’achat') === prixAchatAttendu)
 
   // Filtre par alerte critique
-  await page.locator('.compteur.alerte').first().click()
+  // « Alertes critiques » est desormais le seul compteur au ton critique;
+  // « SAAQ a faire » porte le ton attente, qui n'est pas un blocage.
+  await page.locator('.compteur.ton-critique').first().click()
   await page.waitForTimeout(400)
   note(`${prefixe} — filtre « alerte critique » appliqué`,
        (await page.locator('.vehicule').count()) === 1)

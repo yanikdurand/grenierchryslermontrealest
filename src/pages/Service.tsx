@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { messageErreur } from '../lib/erreurs'
 import { argent, nombre, texte } from '../lib/format'
+import { classeStatut } from '../lib/statuts'
 import type { FileService } from '../lib/types'
 
 /**
@@ -50,7 +51,7 @@ export function Service() {
                 <Link to={`/vehicule/${f.vehicule_id}/inspection`} className="no-stock lien-stock">
                   {f.no_stock}
                 </Link>
-                <span className="statut">{f.statut_vehicule}</span>
+                <span className={classeStatut(f.statut_vehicule)}>{f.statut_vehicule}</span>
               </div>
 
               <div className="vehicule-titre">{texte(f.vehicule)}</div>

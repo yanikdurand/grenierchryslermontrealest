@@ -4,6 +4,19 @@ import { supabase } from '../lib/supabase'
 import { messageErreur } from '../lib/erreurs'
 import { useMoi } from '../auth/MoiContexte'
 import { argent, nombre, texte } from '../lib/format'
+import { classeStatut, familleStatut } from '../lib/statuts'
+import type { FamilleStatut } from '../lib/statuts'
+
+/** Une file nommée de l'inventaire : un compteur qui est aussi une destination. */
+type File = {
+  cle: string
+  libelle: string
+  compte: number
+  actif: boolean
+  aller: () => void
+  /** Teinte du chiffre. « critique » est le seul rouge de l'écran. */
+  ton?: FamilleStatut | 'critique'
+}
 import type { Statut, VehiculeApp } from '../lib/types'
 
 const ATTENTE_RECEPTION = 'ATT. RÉCEPTION'
@@ -108,16 +121,18 @@ export function Inventaire() {
    */
   const files = useMemo(() => {
     const parStatut = (nom: string) => vehicules.filter((v) => v.statut === nom).length
-    const base = [
+    const base: File[] = [
       { cle: 'tous', libelle: 'Tous', compte: vehicules.length,
         actif: !statutChoisi && !critiquesSeulement && !saaqSeulement,
         aller: () => filtrer({}) },
+      // Une réparation critique bloque la vente : c'est le seul rouge de l'écran.
       { cle: 'critiques', libelle: 'Alertes critiques',
         compte: vehicules.filter((v) => v.nb_critiques > 0).length,
-        alerte: true, actif: critiquesSeulement, aller: () => filtrer({ critiques: true }) },
+        ton: 'critique', actif: critiquesSeulement, aller: () => filtrer({ critiques: true }) },
+      // La SAAQ est une tâche à faire, pas une panne : orange, pas rouge.
       { cle: 'saaq', libelle: 'SAAQ à faire',
         compte: vehicules.filter((v) => v.requiert_inspection_saaq && !v.saaq_complete_le).length,
-        alerte: true, actif: saaqSeulement, aller: () => filtrer({ saaq: true }) },
+        ton: 'attente', actif: saaqSeulement, aller: () => filtrer({ saaq: true }) },
     ]
     // Les statuts que l'équipe suit au quotidien dans Airtable.
     const suivis = [ATTENTE_RECEPTION, 'VÉHICULE REÇU', 'DISPONIBLE', 'DÉPÔT RÉSERVÉ',
@@ -127,6 +142,10 @@ export function Inventaire() {
       if (compte === 0 && statutChoisi !== nom) continue
       base.push({
         cle: nom, libelle: nom, compte,
+        // Le compteur porte la teinte de sa famille : la tuile et la pastille
+        // du véhicule disent alors la même chose, ce qui évite de réapprendre
+        // un code de couleurs par écran.
+        ton: familleStatut(nom),
         actif: statutChoisi === nom, aller: () => filtrer({ statut: nom }),
       })
     }
@@ -173,7 +192,7 @@ export function Inventaire() {
           <button
             key={f.cle}
             type="button"
-            className={`compteur ${f.alerte ? 'alerte' : ''} ${f.actif ? 'actif' : ''}`}
+            className={`compteur ${f.ton ? `ton-${f.ton}` : ''} ${f.actif ? 'actif' : ''}`}
             onClick={f.aller}
           >
             <span className="chiffre">{f.compte}</span>
@@ -230,7 +249,7 @@ export function Inventaire() {
                   <Link to={`/vehicule/${v.id}`} className="no-stock lien-stock">
                     {v.no_stock}
                   </Link>
-                  <span className="statut">{v.statut}</span>
+                  <span className={classeStatut(v.statut)}>{v.statut}</span>
                 </div>
 
                 <div className="vehicule-titre">{v.vehicule_titre}</div>

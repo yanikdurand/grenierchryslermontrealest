@@ -73,6 +73,9 @@
   --succes-fond: rgba(51, 133, 0, 0.2);
   --avertissement: #ff895e;
   --avertissement-fond: rgba(206, 71, 0, 0.2);
+  /* Le violet de leur rampe : réservé à ce qui est engagé auprès d'un client. */
+  --special: #bb9cff;
+  --special-fond: rgba(142, 72, 255, 0.2);
 
   --rayon: 8px;
   --rayon-petit: 6px;
@@ -330,13 +333,19 @@ h1, h2, h3 {
 
 /*
  * Le motif de Lovable pour tout ce qui porte un sens : le texte prend la
- * teinte, le fond prend la même teinte à 10 % d'opacité, et il n'y a pas de
- * bordure. Un seul geste, décliné partout — messages, statuts, pastilles.
+ * teinte et le fond la même teinte, très diluée.
+ *
+ * Le lavis est plus pâle ici que sur les pastilles. À 20 % sur une pastille de
+ * deux centimètres, la teinte se lit; à 20 % sur un bandeau qui traverse
+ * l'écran, elle devient une dalle. La proportion de surface change ce qu'une
+ * même valeur donne à voir — c'est le filet coloré qui porte le sens sur les
+ * grandes surfaces.
  */
 .message-erreur,
 .message-avertissement,
 .bandeau-succes {
   border-radius: var(--rayon);
+  border: 1px solid;
   padding: 0.7rem 0.85rem;
   font-size: 0.9rem;
   line-height: 1.5;
@@ -344,17 +353,20 @@ h1, h2, h3 {
 }
 
 .message-erreur {
-  background: var(--alerte-fond);
+  background: rgba(225, 36, 41, 0.1);
+  border-color: rgba(225, 36, 41, 0.4);
   color: var(--alerte);
 }
 
 .message-avertissement {
-  background: var(--avertissement-fond);
+  background: rgba(206, 71, 0, 0.1);
+  border-color: rgba(206, 71, 0, 0.4);
   color: var(--avertissement);
 }
 
 .bandeau-succes {
-  background: var(--succes-fond);
+  background: rgba(51, 133, 0, 0.1);
+  border-color: rgba(51, 133, 0, 0.4);
   color: var(--succes);
 }
 
@@ -706,6 +718,42 @@ h1, h2, h3 {
   white-space: nowrap;
 }
 
+/*
+ * Cinq familles pour dix-neuf statuts. Le détail du choix — et pourquoi la
+ * couleur ne remplace jamais le libellé — est dans `src/lib/statuts.ts`.
+ * Chaque famille suit le motif de Lovable : texte teinté sur un lavis de la
+ * même teinte, sans bordure colorée. Contraste vérifié entre 5,2 et 5,9:1.
+ */
+.statut-attente {
+  color: var(--avertissement);
+  background: var(--avertissement-fond);
+  border-color: transparent;
+}
+
+.statut-preparation {
+  color: var(--marque);
+  background: var(--marque-fond);
+  border-color: transparent;
+}
+
+.statut-disponible {
+  color: var(--succes);
+  background: var(--succes-fond);
+  border-color: transparent;
+}
+
+.statut-vente {
+  color: var(--special);
+  background: var(--special-fond);
+  border-color: transparent;
+}
+
+/* « Clos » garde le neutre : un véhicule livré n'appelle plus l'œil. */
+.statut-clos {
+  color: var(--encre-douce);
+  background: var(--surface-haute);
+}
+
 .vehicule-titre {
   color: var(--encre-douce);
   margin-bottom: 0.75rem;
@@ -739,17 +787,20 @@ h1, h2, h3 {
   gap: 0.35rem;
 }
 
+/* Même règle que les bandeaux : diluée, car la bande fait toute la carte. */
 .alerte {
   font-size: 0.85rem;
   line-height: 1.45;
   padding: 0.45rem 0.65rem;
   border-radius: var(--rayon-petit);
-  background: var(--avertissement-fond);
+  background: rgba(206, 71, 0, 0.1);
+  border: 1px solid rgba(206, 71, 0, 0.4);
   color: var(--avertissement);
 }
 
 .alerte.critique {
-  background: var(--alerte-fond);
+  background: rgba(225, 36, 41, 0.1);
+  border-color: rgba(225, 36, 41, 0.4);
   color: var(--alerte);
   font-weight: 500;
 }
@@ -817,9 +868,33 @@ h1, h2, h3 {
   margin-top: 0.2rem;
 }
 
-.compteur.alerte .chiffre { color: var(--alerte); }
-.compteur.alerte.actif,
-.compteur.alerte.actif:hover {
+/*
+ * Le chiffre porte la teinte de sa famille, la tuile reste neutre. Une tuile
+ * entièrement colorée par compteur donnerait une mosaïque; c'est le chiffre
+ * qu'on lit, c'est lui qui se teinte.
+ *
+ * Les familles sont celles de `src/lib/statuts.ts`, plus « critique » pour ce
+ * qui bloque réellement une vente. Auparavant tout portait `alerte` : sept
+ * chiffres rouges sur un écran, et plus aucun ne ressortait.
+ */
+.compteur.ton-critique .chiffre    { color: var(--alerte); }
+.compteur.ton-attente .chiffre     { color: var(--avertissement); }
+.compteur.ton-preparation .chiffre { color: var(--marque); }
+.compteur.ton-disponible .chiffre  { color: var(--succes); }
+.compteur.ton-vente .chiffre       { color: var(--special); }
+/* « Clos » n'appelle pas l'œil : le chiffre garde l'encre courante. */
+
+/*
+ * Le critique porte en plus un filet à gauche, et ce n'est pas décoratif.
+ * Le rouge #FF867B et l'orange #FF895E de leur rampe sombre ne se séparent
+ * qu'à ΔE 3,7 — même en vision normale, « Sans VIN » et « Non affichés » côte
+ * à côte paraissaient de la même couleur. Le filet ajoute une différence de
+ * forme, qui elle se voit quelle que soit la vision des couleurs.
+ */
+.compteur.ton-critique { border-left: 3px solid var(--alerte); }
+
+.compteur.ton-critique.actif,
+.compteur.ton-critique.actif:hover {
   border-color: var(--alerte);
   box-shadow: inset 0 0 0 1px var(--alerte);
 }
@@ -1135,7 +1210,7 @@ h1, h2, h3 {
 }
 
 .ligne-inspection.de_base     { border-left-color: var(--marque); }
-.ligne-inspection.signature   { border-left-color: #bb9cff; }
+.ligne-inspection.signature   { border-left-color: var(--special); }
 .ligne-inspection.garantie    { border-left-color: var(--succes); }
 .ligne-inspection.ne_pas_faire{ border-left-color: var(--encre-douce); opacity: 0.7; }
 .ligne-inspection.en_attente  { border-left-color: var(--avertissement); }
@@ -1344,10 +1419,15 @@ h1, h2, h3 {
 .mouvements { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .mouvements .bouton-secondaire { font-size: 0.85rem; padding: 0.5rem 0.85rem; }
 
-.vente.vendu     { border-left: 4px solid var(--avertissement); }
-.vente.approuve  { border-left: 4px solid var(--succes); }
-.vente.depot     { border-left: 4px solid var(--marque); }
-.vente.livre     { border-left: 4px solid var(--encre-douce); }
+/*
+ * Le filet de la carte dit « ce vehicule est engage aupres d'un client »; la
+ * pastille dit a quelle etape. Deux signaux, deux roles — les graduer tous
+ * les deux ferait repeter la meme information en deux codes differents.
+ */
+.vente.depot,
+.vente.vendu,
+.vente.approuve  { border-left: 3px solid var(--special); }
+.vente.livre     { border-left: 3px solid var(--trait-appuye); }
 
 .action-repliable summary {
   list-style: none;
@@ -1391,21 +1471,37 @@ h1, h2, h3 {
 
 .barre-libelle { color: var(--encre-douce); }
 
+/*
+ * Une seule teinte pour toutes les barres, et c'est voulu. Le graphique
+ * compare une même mesure — des leads — d'une source à l'autre : ce qui
+ * distingue les lignes, c'est leur longueur, pas leur couleur. Colorer chaque
+ * source ferait croire à cinq catégories de nature différente, et brûlerait
+ * les teintes réservées aux statuts.
+ *
+ * La valeur reste en encre courante : le chiffre ne porte pas la couleur de
+ * sa barre, sinon l'identité passerait par la couleur seule.
+ */
 .barre-piste {
-  background: var(--fond);
+  background: var(--fond-creux);
+  border: 1px solid var(--trait);
   border-radius: 999px;
-  height: 0.75rem;
+  height: 0.7rem;
   overflow: hidden;
 }
 
 .barre-remplie {
   display: block;
   height: 100%;
-  background: var(--marque-vive);
+  background: var(--marque);
   border-radius: 999px;
 }
 
-.barre-valeur { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.barre-valeur {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--encre);
+}
 
 @media (max-width: 640px) {
   .barres > li { grid-template-columns: 6rem 1fr 2.5rem; gap: 0.5rem; }
