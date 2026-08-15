@@ -1420,14 +1420,11 @@ h1, h2, h3 {
 .mouvements .bouton-secondaire { font-size: 0.85rem; padding: 0.5rem 0.85rem; }
 
 /*
- * Le filet de la carte dit « ce vehicule est engage aupres d'un client »; la
- * pastille dit a quelle etape. Deux signaux, deux roles — les graduer tous
- * les deux ferait repeter la meme information en deux codes differents.
+ * Pas de filet coloré ici : la pastille de statut, en haut à droite de la
+ * carte, porte déjà la teinte et le libellé de l'étape. Le filet répétait la
+ * même information dans un second code, et la couleur pleine sur trois
+ * pixels lisait comme un accroc plutôt qu'un signal.
  */
-.vente.depot,
-.vente.vendu,
-.vente.approuve  { border-left: 3px solid var(--special); }
-.vente.livre     { border-left: 3px solid var(--trait-appuye); }
 
 .action-repliable summary {
   list-style: none;
