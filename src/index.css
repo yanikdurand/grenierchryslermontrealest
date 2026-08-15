@@ -885,13 +885,13 @@ h1, h2, h3 {
 /* « Clos » n'appelle pas l'œil : le chiffre garde l'encre courante. */
 
 /*
- * Le critique porte en plus un filet à gauche, et ce n'est pas décoratif.
- * Le rouge #FF867B et l'orange #FF895E de leur rampe sombre ne se séparent
- * qu'à ΔE 3,7 — même en vision normale, « Sans VIN » et « Non affichés » côte
- * à côte paraissaient de la même couleur. Le filet ajoute une différence de
- * forme, qui elle se voit quelle que soit la vision des couleurs.
+ * Pas de filet ici. Le rouge #FF867B et l'orange #FF895E de leur rampe sombre
+ * ne se séparent qu'à ΔE 3,7 — un filet aurait comblé l'écart pour qui ne
+ * distingue pas les deux teintes. Mais chaque tuile garde son libellé en
+ * toutes lettres sous le chiffre : « Alertes critiques » ne se confond avec
+ * « SAAQ à faire » par aucune vision, puisque le texte n'est jamais la
+ * couleur seule.
  */
-.compteur.ton-critique { border-left: 3px solid var(--alerte); }
 
 .compteur.ton-critique.actif,
 .compteur.ton-critique.actif:hover {
@@ -1202,18 +1202,19 @@ h1, h2, h3 {
 
 .lignes-inspection { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.85rem; }
 
+/*
+ * Pas de filet coloré par catégorie : `decision-actuelle`, dans l'en-tête de
+ * la ligne, nomme déjà la catégorie en toutes lettres, et la pastille rouge
+ * jaune vert porte la sévérité. Un troisième code de couleur sur la même
+ * ligne n'ajoutait rien à lire, seulement une bordure à décoder.
+ */
 .ligne-inspection {
   border: 1px solid var(--trait);
-  border-left: 4px solid var(--trait);
   border-radius: var(--rayon);
   padding: 0.85rem 1rem;
 }
 
-.ligne-inspection.de_base     { border-left-color: var(--marque); }
-.ligne-inspection.signature   { border-left-color: var(--special); }
-.ligne-inspection.garantie    { border-left-color: var(--succes); }
-.ligne-inspection.ne_pas_faire{ border-left-color: var(--encre-douce); opacity: 0.7; }
-.ligne-inspection.en_attente  { border-left-color: var(--avertissement); }
+.ligne-inspection.ne_pas_faire { opacity: 0.7; }
 
 .ligne-tete {
   display: flex;
@@ -1370,7 +1371,6 @@ h1, h2, h3 {
   gap: 1rem;
   background: var(--surface);
   border: 1px solid var(--trait);
-  border-left: 3px solid var(--marque-vive);
   border-radius: var(--rayon-grand);
   box-shadow: var(--ombre-basse);
   padding: 1rem 1.1rem;
@@ -1379,10 +1379,11 @@ h1, h2, h3 {
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 
-.tache:hover { border-color: var(--trait-appuye); border-left-color: var(--marque-vive);
-  box-shadow: var(--ombre-levee); }
-.tache.urgente { border-left-color: var(--alerte); }
-.tache.urgente:hover { border-left-color: var(--alerte); }
+.tache:hover { border-color: var(--trait-appuye); box-shadow: var(--ombre-levee); }
+
+/* Le chiffre porte la couleur; la carte reste neutre. Le titre en toutes
+   lettres à côté fait qu'on ne lit jamais la couleur seule. */
+.tache.urgente .tache-compte { color: var(--alerte); }
 
 .tache-compte {
   font-size: 1.9rem;
@@ -1393,8 +1394,6 @@ h1, h2, h3 {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-
-.tache.urgente .tache-compte { color: var(--alerte); }
 
 .tache-corps { display: flex; flex-direction: column; gap: 0.15rem; }
 .tache-titre { font-weight: 600; }
