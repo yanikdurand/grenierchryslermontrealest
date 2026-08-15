@@ -196,6 +196,72 @@ h1, h2, h3 {
   margin-left: 0.4rem;
 }
 
+/*
+ * Point d'interrogation à côté du libellé plutôt qu'une phrase sous chaque
+ * champ. Un formulaire où trois champs sur cinq portent une ligne d'aide
+ * finit par ressembler à une notice, pas à un formulaire — l'explication
+ * n'est plus là que pour qui la demande.
+ */
+.info {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+}
+
+.info-declencheur {
+  display: grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  border: 1px solid var(--trait-appuye);
+  border-radius: 50%;
+  background: none;
+  color: var(--encre-discrete);
+  font-size: 0.64rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+  transition: border-color var(--transition), color var(--transition);
+}
+
+.info-declencheur:hover,
+.info-declencheur:focus-visible {
+  border-color: var(--marque-vive);
+  color: var(--marque-vive);
+}
+
+.info-bulle {
+  position: absolute;
+  z-index: 40;
+  bottom: calc(100% + 0.4rem);
+  left: 50%;
+  transform: translate(-50%, 2px);
+  width: max-content;
+  max-width: 15rem;
+  background: var(--surface-haute);
+  border: 1px solid var(--trait);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre-levee);
+  padding: 0.5rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--encre-douce);
+  line-height: 1.45;
+  text-transform: none;
+  letter-spacing: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.info:hover .info-bulle,
+.info-declencheur:focus-visible + .info-bulle {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 .champ input,
 .champ select,
 .champ textarea {
@@ -220,6 +286,12 @@ h1, h2, h3 {
   border-color: var(--marque-vive);
 }
 
+/* Le champ porte lui-même le signal — l'œil le voit avant de lire le texte. */
+.champ input.avertissement,
+.champ select.avertissement {
+  border-color: var(--avertissement);
+}
+
 .champ textarea { resize: vertical; }
 
 .champ-fichier small,
@@ -232,6 +304,23 @@ h1, h2, h3 {
 }
 
 .indice-erreur { color: var(--alerte) !important; }
+
+/*
+ * Même poids visuel que `.indice-erreur` — un simple mot de couleur, pas un
+ * bandeau encadré. L'ancien avertissement en boîte pleine largeur pesait plus
+ * lourd que le doublon lui-même : trois lignes, une bordure, un fond, pour
+ * dire une phrase. Le champ prend déjà la couleur (`.avertissement`
+ * ci-dessus) — le texte n'a plus qu'à confirmer.
+ */
+.indice-avertissement {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--avertissement);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.indice-avertissement a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 .case,
 .radio {

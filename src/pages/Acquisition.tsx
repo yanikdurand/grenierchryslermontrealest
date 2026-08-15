@@ -6,6 +6,7 @@ import { messageErreur } from '../lib/erreurs'
 import { useMoi } from '../auth/MoiContexte'
 import { decoderVin } from '../lib/nhtsa'
 import { MARQUES, chargerModeles } from '../lib/referentielVehicules'
+import { Info } from '../composants/Info'
 import type { Fournisseur, TypeDocument } from '../lib/types'
 
 const ECHANGE_CLIENT = 'Échange client'
@@ -371,23 +372,28 @@ export function Acquisition() {
             <label className="champ">
               <span>Numéro de stock <em>obligatoire</em></span>
               <input
+                className={noStockExistant ? 'avertissement' : undefined}
                 value={noStock}
                 onChange={(e) => setNoStock(e.target.value.toUpperCase())}
                 required
                 autoFocus
               />
               {noStockExistant && (
-                <p className="message-avertissement espace-haut">
-                  Ce numéro de stock existe déjà — <Link to={`/vehicule/${noStockExistant.id}`}>
+                <small className="indice-avertissement">
+                  Déjà utilisé — <Link to={`/vehicule/${noStockExistant.id}`}>
                     {noStockExistant.titre}
-                  </Link>. Choisissez-en un autre.
-                </p>
+                  </Link>
+                </small>
               )}
             </label>
 
             <label className="champ">
-              <span>VIN <em>obligatoire — 17 caractères</em></span>
+              <span>
+                VIN <em>obligatoire — 17 caractères</em>
+                <Info texte="Le décodage se lance seul dès que le VIN est complet et valide : marque, modèle, année et version sont proposés à partir de là — à vérifier avant d'envoyer." />
+              </span>
               <input
+                className={vinExistant ? 'avertissement' : undefined}
                 value={vin}
                 onChange={(e) => { setVin(e.target.value.toUpperCase()); setDecodage('inactif') }}
                 maxLength={LONGUEUR_VIN}
@@ -398,18 +404,13 @@ export function Acquisition() {
                 <small className="indice-erreur">{vinInvalide(vin)}</small>
               )}
               {vinExistant && (
-                <p className="message-avertissement espace-haut">
-                  Ce VIN est déjà en inventaire — <Link to={`/vehicule/${vinExistant.id}`}>
+                <small className="indice-avertissement">
+                  Déjà en inventaire — <Link to={`/vehicule/${vinExistant.id}`}>
                     {vinExistant.titre}
-                  </Link>.
-                </p>
-              )}
-              {decodage === 'encours' && <small>Décodage du VIN…</small>}
-              {decodage === 'succes' && (
-                <small>
-                  Décodé : {decodageMessage} — marque, modèle et année pré-remplis, à vérifier.
+                  </Link>
                 </small>
               )}
+              {decodage === 'encours' && <small>Décodage du VIN…</small>}
               {decodage === 'echec' && (
                 <small className="indice-erreur">
                   {decodageMessage} <button
@@ -421,7 +422,10 @@ export function Acquisition() {
             </label>
 
             <label className="champ">
-              <span>Année <em>obligatoire</em></span>
+              <span>
+                Année <em>obligatoire</em>
+                <Info texte="Choisie avant la marque : le menu Modèle en dépend, comme sur AutoTrader." />
+              </span>
               <input
                 type="number"
                 value={annee}
@@ -430,7 +434,6 @@ export function Acquisition() {
                 max={new Date().getFullYear() + 2}
                 required
               />
-              <small>Choisie avant la marque : le modèle en dépend, comme sur AutoTrader.</small>
             </label>
 
             <label className="champ">
@@ -457,7 +460,10 @@ export function Acquisition() {
             </label>
 
             <label className="champ">
-              <span>Modèle <em>obligatoire</em></span>
+              <span>
+                Modèle <em>obligatoire</em>
+                <Info texte="Vient de NHTSA pour la marque et l'année choisies. Marque absente de la liste ou modèle non reconnu : choisissez « Autre »." />
+              </span>
               <select
                 value={modele}
                 onChange={(e) => setModele(e.target.value)}
@@ -473,9 +479,6 @@ export function Acquisition() {
                 {optionsModele.map((m) => <option key={m} value={m}>{m}</option>)}
                 <option value={VALEUR_AUTRE}>Autre — préciser…</option>
               </select>
-              {marque === VALEUR_AUTRE && (
-                <small>Le modèle passe en saisie libre — marque hors liste NHTSA.</small>
-              )}
               {modele === VALEUR_AUTRE && (
                 <input
                   className="espace-haut"
@@ -489,12 +492,11 @@ export function Acquisition() {
             </label>
 
             <label className="champ">
-              <span>Version <em>optionnel</em></span>
+              <span>
+                Version <em>optionnel</em>
+                <Info texte="Suggérée par le décodage du VIN quand disponible — un VIN n'encode qu'une seule version, à corriger au besoin." />
+              </span>
               <input value={trim} onChange={(e) => setTrim(e.target.value)} />
-              <small>
-                Suggérée par le décodage du VIN quand disponible — un VIN n’encode qu’une
-                seule version, à corriger au besoin.
-              </small>
             </label>
 
             <label className="champ">
@@ -553,18 +555,18 @@ export function Acquisition() {
           </div>
 
           <label className="champ champ-fichier">
-            <span>{libelleJustificatif} <em>obligatoire</em></span>
+            <span>
+              {libelleJustificatif} <em>obligatoire</em>
+              <Info texte={estEchange
+                ? "Le véhicule vient d'une reprise : joindre la feuille d'évaluation."
+                : 'Joindre la facture reçue du fournisseur.'} />
+            </span>
             <input
               type="file"
               accept="image/jpeg,image/png,image/heic,image/webp,application/pdf"
               onChange={(e) => setJustificatif(e.target.files?.[0] ?? null)}
               required
             />
-            <small>
-              {estEchange
-                ? "Le véhicule vient d'une reprise : joindre la feuille d'évaluation."
-                : 'Joindre la facture reçue du fournisseur.'}
-            </small>
           </label>
         </section>
 
@@ -572,7 +574,10 @@ export function Acquisition() {
           <h2>Immatriculation et SAAQ</h2>
 
           <label className="champ champ-fichier">
-            <span>Photo des immatriculations <em>optionnel</em></span>
+            <span>
+              Photo des immatriculations <em>optionnel</em>
+              <Info texte="Pas toujours disponible au moment de l'achat — le champ peut rester vide." />
+            </span>
             <input
               type="file"
               accept="image/jpeg,image/png,image/heic,image/webp,application/pdf"
@@ -581,7 +586,6 @@ export function Acquisition() {
                 if (!e.target.files?.[0]) setRequiertSaaq('')
               }}
             />
-            <small>Pas toujours disponible au moment de l’achat — le champ peut rester vide.</small>
           </label>
 
           {saaqRequisPourFormulaire && (
