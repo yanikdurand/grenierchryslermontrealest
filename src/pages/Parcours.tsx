@@ -28,8 +28,8 @@ type Delai = {
  * ferait crier au loup sur 75 véhicules qui vont très bien.
  */
 const EN_PREPARATION = [
-  'ATT. RÉCEPTION', 'VÉHICULE REÇU', 'PRÊT À INSPECTER', 'INSPECTION OCC.',
-  'MÉCANIQUE INT.', 'MÉCANIQUE EXT.', 'CARROSSERIE EXT.', 'SAAQ À FAIRE',
+  'ATTENTE DE RÉCEPTION', 'VÉHICULE REÇU', 'PRÊT À INSPECTER', 'INSPECTION',
+  'MÉCANIQUE INTERNE', 'MÉCANIQUE EXTERNE', 'CARROSSERIE EXTERNE', 'SAAQ À FAIRE',
 ]
 
 /** Au-delà, l'étape mérite qu'on regarde. */

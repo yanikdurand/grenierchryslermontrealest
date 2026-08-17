@@ -95,9 +95,9 @@ const PROFILS = {
 }
 
 const STATUTS = [
-  { id: 1, nom: 'ATT. RÉCEPTION', ordre: 1 },
+  { id: 1, nom: 'ATTENTE DE RÉCEPTION', ordre: 1 },
   { id: 2, nom: 'VÉHICULE REÇU', ordre: 2 },
-  { id: 5, nom: 'MÉCANIQUE INT.', ordre: 5 },
+  { id: 5, nom: 'MÉCANIQUE INTERNE', ordre: 5 },
   { id: 10, nom: 'DISPONIBLE', ordre: 10 },
 ]
 
@@ -116,7 +116,7 @@ function vehiculeDemo(profil) {
     requiert_inspection_saaq: true, saaq_rdv_le: null, saaq_complete_le: null,
     date_recu: '2026-08-01', date_mise_en_service: null, jours_inventaire: 11,
     affiche_en_ligne: false, photos_en_ligne: 0, lien_fiche_web: null, verifie_le: null,
-    prix_vente: 24995,
+    prix_vente: 24995, disponible_depuis: null,
     cout_carfax: null, cout_signature_engage: null, cout_base_a_venir: null,
     cout_signature_potentiel: null, valeur_garantie: null,
     statut_autorisation: 'En attente', feuille_pourcentage: 45,
@@ -279,9 +279,20 @@ async function scenario(navigateur, cle) {
       return route.fulfill(json([{ id: 1, nom: 'Encan' }, { id: 2, nom: 'Échange client' }]))
     }
     if (chemin === '/rest/v1/v_vehicule_app') {
+      // Réplique le LATERAL join de la vraie vue : le dossier de vente vivant
+      // s'affiche à côté du statut opérationnel, sans jamais l'écraser.
+      const venteActive = ventes.find((x) => x.etat !== 'annule' && x.etat !== 'livre')
+      const avecVente = {
+        ...vehicule,
+        vente_id: venteActive?.id ?? null,
+        vente_etat: venteActive?.etat ?? null,
+        vente_type_transaction: venteActive?.type_transaction ?? null,
+        vente_force_dossier: venteActive?.force_dossier ?? null,
+        vente_date_livraison_prevue: venteActive?.date_livraison_prevue ?? null,
+      }
       // `maybeSingle()` demande un objet, la liste attend un tableau.
       const seul = (req.headers()['accept'] || '').includes('vnd.pgrst.object')
-      return route.fulfill(json(seul ? vehicule : [vehicule]))
+      return route.fulfill(json(seul ? avecVente : [avecVente]))
     }
     if (chemin === '/rest/v1/v_feuille_equipements') {
       return route.fulfill(json([
@@ -426,14 +437,16 @@ async function scenario(navigateur, cle) {
       }
       if (fonction === 'maj_prix_vente') vehicule = { ...vehicule, prix_vente: p.p_prix }
       if (fonction === 'deplacer_vehicule') {
-        const carte = { garage_interne: 'MÉCANIQUE INT.', disponible: 'DISPONIBLE',
+        const carte = { garage_interne: 'MÉCANIQUE INTERNE', disponible: 'DISPONIBLE',
                         terrebonne: 'TERREBONNE', wholesale: 'WHOLESALE' }
         vehicule = { ...vehicule, statut: carte[p.p_mouvement] ?? vehicule.statut }
       }
       if (fonction === 'enregistrer_vente') {
+        // Le statut du véhicule ne bouge plus au dépôt d'une vente : seul
+        // l'état du dossier change, dérivé et affiché indépendamment.
         ventes = [{
           id: 'vte-1', vehicule_id: p.p_vehicule, no_stock: 'A1234',
-          vehicule_titre: '2021 HONDA ACCORD', statut_vehicule: 'ATT. APPROBATION',
+          vehicule_titre: '2021 HONDA ACCORD', statut_vehicule: vehicule.statut,
           client: p.p_client, telephone: p.p_telephone, courriel: null,
           vendeur: null, vendeur_id: null, type_transaction: p.p_type_transaction,
           prix_vendu: p.p_prix, etat: 'vendu', force_dossier: null, fi: null, fi_le: null,
@@ -445,10 +458,10 @@ async function scenario(navigateur, cle) {
       }
       if (fonction === 'noter_approbation') {
         ventes = ventes.map((x) => ({ ...x, force_dossier: p.p_force_dossier,
-          etat: p.p_approuve ? 'approuve' : x.etat,
-          statut_vehicule: p.p_approuve ? 'ATT. LIVRAISON' : x.statut_vehicule }))
+          etat: p.p_approuve ? 'approuve' : x.etat }))
       }
       if (fonction === 'noter_livraison') {
+        vehicule = { ...vehicule, statut: 'LIVRÉ' }
         ventes = ventes.map((x) => ({ ...x, etat: 'livre', livre_le: new Date().toISOString(),
           statut_vehicule: 'LIVRÉ' }))
       }
@@ -728,8 +741,8 @@ async function scenario(navigateur, cle) {
     note(`${prefixe} — enregistrer_vente appelé`,
          appels.some((a) => a.fonction === 'enregistrer_vente'
                          && a.p.p_type_transaction === 'financement'))
-    note(`${prefixe} — le dossier apparaît avec le statut dérivé`,
-         (await page.locator('.vente').first().textContent())?.includes('ATT. APPROBATION'))
+    note(`${prefixe} — le dossier apparaît avec l'état dérivé`,
+         (await page.locator('.vente').first().textContent())?.includes('Vendu'))
 
     if (profil.droits.includes('vente.financement')) {
       await page.locator('summary:has-text("Noter l’approbation")').first().click()

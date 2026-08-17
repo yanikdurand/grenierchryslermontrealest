@@ -30,22 +30,27 @@ export type FamilleStatut =
   /** Sorti du cycle de vente : livré, prêté, transféré, écoulé en gros. */
   | 'clos'
 
+/**
+ * Depuis la séparation des deux axes (17 août 2026), ces noms ne décrivent
+ * plus que l'étape opérationnelle — jamais où en est une vente. Un véhicule
+ * vendu garde son étape opérationnelle réelle (souvent DISPONIBLE, parfois
+ * MÉCANIQUE INTERNE le temps d'une préparation de livraison) : c'est le
+ * badge de vente, calculé séparément par `libelleVente`, qui porte
+ * « Vendu — attente d'approbation ». Les deux s'affichent côte à côte,
+ * jamais l'un à la place de l'autre.
+ */
 const FAMILLES: Record<string, FamilleStatut> = {
-  'ATT. RÉCEPTION': 'attente',
+  'ATTENTE DE RÉCEPTION': 'attente',
 
   'VÉHICULE REÇU': 'preparation',
   'PRÊT À INSPECTER': 'preparation',
-  'INSPECTION OCC.': 'preparation',
-  'MÉCANIQUE INT.': 'preparation',
-  'MÉCANIQUE EXT.': 'preparation',
-  'CARROSSERIE EXT.': 'preparation',
+  INSPECTION: 'preparation',
+  'MÉCANIQUE INTERNE': 'preparation',
+  'MÉCANIQUE EXTERNE': 'preparation',
+  'CARROSSERIE EXTERNE': 'preparation',
   'SAAQ À FAIRE': 'preparation',
 
   DISPONIBLE: 'disponible',
-
-  'DÉPÔT RÉSERVÉ': 'vente',
-  'ATT. APPROBATION': 'vente',
-  'ATT. LIVRAISON': 'vente',
 
   LIVRÉ: 'clos',
   DÉMO: 'clos',
@@ -78,4 +83,36 @@ export function classeEtatVente(etat: string | null | undefined): string {
     : etat === 'livre' ? 'clos'
     : 'attente'
   return `statut statut-${famille}`
+}
+
+/**
+ * Le badge de vente, calculé plutôt que stocké — `vente.etat` fait autorité,
+ * jamais une copie sur le véhicule. `null` veut dire « aucun dossier actif »,
+ * pas « pas encore vendu » : les deux se distinguent déjà par l'absence du
+ * badge à l'écran.
+ *
+ * La force du dossier n'apparaît que pour un financement, et seulement tant
+ * que la livraison n'est pas encore passée à l'écran — une fois `livre`, la
+ * vue `v_vehicule_app` ne renvoie plus de dossier actif du tout.
+ */
+export function libelleVente(v: {
+  vente_etat: string | null
+  vente_type_transaction: string | null
+  vente_force_dossier: string | null
+}): string | null {
+  if (!v.vente_etat) return null
+  if (v.vente_etat === 'depot') return 'Vendu — dépôt reçu'
+
+  const financement = v.vente_type_transaction === 'financement'
+  const suffixeForce = financement && v.vente_force_dossier
+    ? `, dossier ${forceDossierMot(v.vente_force_dossier)}` : ''
+
+  if (v.vente_etat === 'vendu' && financement) {
+    return `Vendu — attente d'approbation${suffixeForce}`
+  }
+  return `Vendu — attente de livraison${suffixeForce}`
+}
+
+function forceDossierMot(code: string): string {
+  return code === 'fort' ? 'fort' : code === 'moyen' ? 'moyen' : code === 'faible' ? 'faible' : code
 }

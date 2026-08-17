@@ -87,6 +87,14 @@ export type VehiculeApp = {
   leads_total: number | null
   leads_30j: number | null
   dernier_lead: string | null
+  /** Depuis quand ce véhicule est achetable — indépendant du statut et d'une vente en cours. */
+  disponible_depuis: string | null
+  /** Le dossier de vente actif, s'il y en a un — jamais stocké sur le véhicule, toujours dérivé de `vente`. */
+  vente_id: string | null
+  vente_etat: string | null
+  vente_type_transaction: string | null
+  vente_force_dossier: string | null
+  vente_date_livraison_prevue: string | null
 }
 
 export type Pneu = {

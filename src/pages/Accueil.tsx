@@ -6,7 +6,7 @@ import { useMoi } from '../auth/MoiContexte'
 import { nombre } from '../lib/format'
 import type { VehiculeApp } from '../lib/types'
 
-const ATTENTE_RECEPTION = 'ATT. RÉCEPTION'
+const ATTENTE_RECEPTION = 'ATTENTE DE RÉCEPTION'
 const RECU = 'VÉHICULE REÇU'
 
 /** Au-delà, un véhicule reçu qui n'avance pas mérite qu'on le signale. */

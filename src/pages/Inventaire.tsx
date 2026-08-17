@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { messageErreur } from '../lib/erreurs'
 import { useMoi } from '../auth/MoiContexte'
 import { argent, nombre, texte } from '../lib/format'
-import { classeStatut, familleStatut } from '../lib/statuts'
+import { classeStatut, classeEtatVente, familleStatut, libelleVente } from '../lib/statuts'
 import type { FamilleStatut } from '../lib/statuts'
 
 /** Une file nommée de l'inventaire : un compteur qui est aussi une destination. */
@@ -19,7 +19,7 @@ type File = {
 }
 import type { Statut, VehiculeApp } from '../lib/types'
 
-const ATTENTE_RECEPTION = 'ATT. RÉCEPTION'
+const ATTENTE_RECEPTION = 'ATTENTE DE RÉCEPTION'
 
 type EtatCreation = {
   creation?: { noStock: string; documentsEnEchec: string[] }
@@ -49,12 +49,14 @@ export function Inventaire() {
   const statutChoisi = params.get('statut') ?? ''
   const critiquesSeulement = params.get('critiques') === '1'
   const saaqSeulement = params.get('saaq') === '1'
+  const venduSeulement = params.get('vendu') === '1'
 
-  function filtrer(suivant: { statut?: string; critiques?: boolean; saaq?: boolean }) {
+  function filtrer(suivant: { statut?: string; critiques?: boolean; saaq?: boolean; vendu?: boolean }) {
     const p = new URLSearchParams()
     if (suivant.statut) p.set('statut', suivant.statut)
     if (suivant.critiques) p.set('critiques', '1')
     if (suivant.saaq) p.set('saaq', '1')
+    if (suivant.vendu) p.set('vendu', '1')
     setParams(p, { replace: true })
   }
 
@@ -106,6 +108,7 @@ export function Inventaire() {
       if (statutChoisi && v.statut !== statutChoisi) return false
       if (critiquesSeulement && v.nb_critiques === 0) return false
       if (saaqSeulement && !(v.requiert_inspection_saaq && !v.saaq_complete_le)) return false
+      if (venduSeulement && !v.vente_etat) return false
       if (!terme) return true
       return (
         v.no_stock?.toUpperCase().includes(terme) ||
@@ -113,7 +116,7 @@ export function Inventaire() {
         v.vehicule_titre?.toUpperCase().includes(terme)
       )
     })
-  }, [vehicules, recherche, statutChoisi, critiquesSeulement, saaqSeulement])
+  }, [vehicules, recherche, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement])
 
   /**
    * Files nommées plutôt que filtres à reconstruire, sur le modèle des pages
@@ -123,7 +126,7 @@ export function Inventaire() {
     const parStatut = (nom: string) => vehicules.filter((v) => v.statut === nom).length
     const base: File[] = [
       { cle: 'tous', libelle: 'Tous', compte: vehicules.length,
-        actif: !statutChoisi && !critiquesSeulement && !saaqSeulement,
+        actif: !statutChoisi && !critiquesSeulement && !saaqSeulement && !venduSeulement,
         aller: () => filtrer({}) },
       // Une réparation critique bloque la vente : c'est le seul rouge de l'écran.
       { cle: 'critiques', libelle: 'Alertes critiques',
@@ -133,10 +136,15 @@ export function Inventaire() {
       { cle: 'saaq', libelle: 'SAAQ à faire',
         compte: vehicules.filter((v) => v.requiert_inspection_saaq && !v.saaq_complete_le).length,
         ton: 'attente', actif: saaqSeulement, aller: () => filtrer({ saaq: true }) },
+      // Le dossier de vente est un axe à part depuis la refonte des statuts —
+      // un véhicule vendu garde son étape opérationnelle réelle (parfois
+      // encore « au service » pour sa préparation de livraison), donc cette
+      // file se lit sur `vente_etat`, jamais sur `statut`.
+      { cle: 'vendu', libelle: 'Vendu', compte: vehicules.filter((v) => v.vente_etat).length,
+        ton: 'vente', actif: venduSeulement, aller: () => filtrer({ vendu: true }) },
     ]
-    // Les statuts que l'équipe suit au quotidien dans Airtable.
-    const suivis = [ATTENTE_RECEPTION, 'VÉHICULE REÇU', 'DISPONIBLE', 'DÉPÔT RÉSERVÉ',
-                    'ATT. LIVRAISON', 'WHOLESALE', 'DÉMO', 'COURTOISIE']
+    // Les statuts opérationnels que l'équipe suit au quotidien dans Airtable.
+    const suivis = [ATTENTE_RECEPTION, 'VÉHICULE REÇU', 'DISPONIBLE', 'WHOLESALE', 'DÉMO', 'COURTOISIE']
     for (const nom of suivis) {
       const compte = parStatut(nom)
       if (compte === 0 && statutChoisi !== nom) continue
@@ -150,7 +158,7 @@ export function Inventaire() {
       })
     }
     return base
-  }, [vehicules, statutChoisi, critiquesSeulement, saaqSeulement])
+  }, [vehicules, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement])
 
   /** Moyennes suivies sur le tableau de bord Airtable. */
   const moyennes = useMemo(() => {
@@ -249,7 +257,12 @@ export function Inventaire() {
                   <Link to={`/vehicule/${v.id}`} className="no-stock lien-stock">
                     {v.no_stock}
                   </Link>
-                  <span className={classeStatut(v.statut)}>{v.statut}</span>
+                  <span className="badges-statut">
+                    <span className={classeStatut(v.statut)}>{v.statut}</span>
+                    {v.vente_etat && (
+                      <span className={classeEtatVente(v.vente_etat)}>{libelleVente(v)}</span>
+                    )}
+                  </span>
                 </div>
 
                 <div className="vehicule-titre">{v.vehicule_titre}</div>

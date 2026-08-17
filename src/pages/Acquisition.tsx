@@ -361,7 +361,7 @@ export function Acquisition() {
     <div className="page">
       <h1 className="titre-page">Nouvelle acquisition</h1>
       <p className="intro-page">
-        Le véhicule sera créé au statut <strong>ATT. RÉCEPTION</strong>, puis apparaîtra
+        Le véhicule sera créé au statut <strong>ATTENTE DE RÉCEPTION</strong>, puis apparaîtra
         dans la liste pour être marqué reçu à son arrivée.
       </p>
 

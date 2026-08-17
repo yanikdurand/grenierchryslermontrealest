@@ -7,7 +7,7 @@ import {
   annee as libelleAnnee, argent, date, dateCourte, jalon as libelleJalon, nombre, ouiNon, poids,
   texte, transmission as libelleTransmission, typeDocument,
 } from '../lib/format'
-import { classeStatut } from '../lib/statuts'
+import { classeStatut, classeEtatVente, libelleVente } from '../lib/statuts'
 import type {
   Document, EquipementCoche, Jalon, Lead, Pneu, PrixHistorique, VehiculeApp,
 } from '../lib/types'
@@ -156,7 +156,12 @@ export function FicheVehicule() {
           <h1 className="titre-page">{v.no_stock}</h1>
           <p className="fiche-titre">{v.vehicule_titre}</p>
         </div>
-        <span className={`${classeStatut(v.statut)} gros`}>{v.statut}</span>
+        <div className="badges-statut">
+          <span className={`${classeStatut(v.statut)} gros`}>{v.statut}</span>
+          {v.vente_etat && (
+            <span className={`${classeEtatVente(v.vente_etat)} gros`}>{libelleVente(v)}</span>
+          )}
+        </div>
       </header>
 
       {v.alertes && (
@@ -252,6 +257,13 @@ export function FicheVehicule() {
           <Ligne etiquette="Date de réception" valeur={date(v.date_recu)} />
           <Ligne etiquette="Jours en inventaire" valeur={nombre(v.jours_inventaire)} />
           <Ligne etiquette="Mise en service" valeur={date(v.date_mise_en_service)} />
+          {/* Un aller-retour au service n'efface plus la disponibilité —
+              elle ne s'efface que si le véhicule sort vraiment de la vente
+              au détail. Masquée pendant un dossier actif : le badge de
+              vente porte déjà l'information la plus pertinente. */}
+          {v.disponible_depuis && !v.vente_etat && (
+            <Ligne etiquette="Disponible depuis" valeur={date(v.disponible_depuis)} />
+          )}
           <Ligne etiquette="Prix de vente" valeur={argent(v.prix_vente)} />
           {v.prix_achat !== null && <Ligne etiquette="Prix d’achat" valeur={argent(v.prix_achat)} />}
           {v.cout_carfax !== null && <Ligne etiquette="Coût Carfax" valeur={argent(v.cout_carfax)} />}

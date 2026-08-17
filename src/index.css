@@ -1067,6 +1067,19 @@ h1, h2, h3 {
   padding: 0.35rem 0.8rem;
 }
 
+/*
+ * Deux badges, jamais un seul écrasé par l'autre : l'étape opérationnelle et
+ * la vente sont deux faits indépendants depuis la refonte du 17 août 2026 —
+ * un véhicule vendu qui repart en mécanique pour sa livraison montre les
+ * deux à la fois plutôt que de perdre l'un des deux.
+ */
+.badges-statut {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
 .fiche-grille {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
