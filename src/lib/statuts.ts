@@ -49,6 +49,7 @@ const FAMILLES: Record<string, FamilleStatut> = {
   'MÉCANIQUE EXTERNE': 'preparation',
   'CARROSSERIE EXTERNE': 'preparation',
   'SAAQ À FAIRE': 'preparation',
+  'DEMANDE DE TRAVAUX': 'preparation',
 
   DISPONIBLE: 'disponible',
 
@@ -111,6 +112,16 @@ export function libelleVente(v: {
     return `Vendu — attente d'approbation${suffixeForce}`
   }
   return `Vendu — attente de livraison${suffixeForce}`
+}
+
+/** Le badge d'une demande de travaux suit la même palette à quatre familles. */
+export function classeStatutDemandeTravaux(statut: string | null | undefined): string {
+  const famille: FamilleStatut =
+    statut === 'brouillon' ? 'attente'
+    : statut === 'envoyee' ? 'preparation'
+    : statut === 'completee' ? 'disponible'
+    : 'clos'
+  return `statut statut-${famille}`
 }
 
 function forceDossierMot(code: string): string {

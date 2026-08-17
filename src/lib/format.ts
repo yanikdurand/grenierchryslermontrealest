@@ -148,6 +148,30 @@ export function forceDossier(code: string | null | undefined): string {
   return FORCES[code] ?? code
 }
 
+const CATEGORIES_TRAVAUX: Record<string, string> = {
+  mecanique: 'Mécanique',
+  esthetique: 'Esthétique',
+  preparation_livraison: 'Préparation livraison',
+  autre: 'Autre',
+}
+
+export function categorieTravaux(code: string | null | undefined): string {
+  if (!code) return ABSENT
+  return CATEGORIES_TRAVAUX[code] ?? code
+}
+
+const STATUTS_DEMANDE_TRAVAUX: Record<string, string> = {
+  brouillon: 'Brouillon',
+  envoyee: 'Envoyée au service',
+  completee: 'Complétée',
+  annulee: 'Annulée',
+}
+
+export function statutDemandeTravaux(code: string | null | undefined): string {
+  if (!code) return ABSENT
+  return STATUTS_DEMANDE_TRAVAUX[code] ?? code
+}
+
 const TRANSACTIONS: Record<string, string> = {
   financement: 'Financement',
   comptant: 'Comptant',

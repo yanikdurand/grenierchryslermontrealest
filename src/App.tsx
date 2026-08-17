@@ -9,6 +9,7 @@ import { FicheVehicule } from './pages/FicheVehicule'
 import { FeuilleEquipements } from './pages/FeuilleEquipements'
 import { Service } from './pages/Service'
 import { Inspection } from './pages/Inspection'
+import { DemandeTravaux } from './pages/DemandeTravaux'
 import { Reglages } from './pages/Reglages'
 import { Accueil } from './pages/Accueil'
 import { Ventes } from './pages/Ventes'
@@ -82,6 +83,7 @@ function Routage() {
         <Route path="/parcours" element={<Parcours />} />
         <Route path="/tableaux" element={<TableauxDeBord />} />
         <Route path="/vehicule/:id/inspection" element={<Inspection />} />
+        <Route path="/vehicule/:id/travaux" element={<DemandeTravaux />} />
         <Route path="/reglages" element={<Reglages />} />
         <Route
           path="/acquisition"

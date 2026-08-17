@@ -768,7 +768,13 @@ h1, h2, h3 {
   gap: 0.85rem;
 }
 
-.vehicule {
+/*
+ * `.carte-travaux` partage exactement le style de `.vehicule` mais porte un
+ * autre nom : les tests comptent `.vehicule` pour valider la file du service,
+ * et une demande de travaux n'est pas une inspection — les mélanger dans le
+ * même compte aurait rendu ce total ambigu.
+ */
+.vehicule, .carte-travaux {
   background: var(--surface);
   border: 1px solid var(--trait);
   border-radius: var(--rayon-grand);

@@ -227,6 +227,39 @@ export type ChangementDecision = {
   motif: string | null
 }
 
+export type StatutDemandeTravaux = 'brouillon' | 'envoyee' | 'completee' | 'annulee'
+export type CategorieTravaux = 'mecanique' | 'esthetique' | 'preparation_livraison' | 'autre'
+
+export type DemandeTravauxApp = {
+  id: string
+  vehicule_id: string
+  no_stock: string
+  vehicule_titre: string
+  statut_vehicule: string | null
+  statut: StatutDemandeTravaux
+  notes: string | null
+  cree_par_nom: string | null
+  cree_le: string
+  envoyee_par_nom: string | null
+  envoyee_le: string | null
+  completee_le: string | null
+  annulee_le: string | null
+  motif_annulation: string | null
+  nb_lignes: number
+  nb_completees: number
+}
+
+export type LigneDemandeTravaux = {
+  id: string
+  demande_id: string
+  no_ligne: number
+  categorie: CategorieTravaux
+  description: string
+  complete: boolean
+  complete_le: string | null
+  complete_par: string | null
+}
+
 export type EtatVente = 'depot' | 'vendu' | 'approuve' | 'livre' | 'annule'
 export type TypeTransaction = 'financement' | 'comptant' | 'location'
 export type ForceDossier = 'fort' | 'moyen' | 'faible'

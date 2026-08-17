@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { messageErreur } from '../lib/erreurs'
+import { useMoi } from '../auth/MoiContexte'
 import { argent, nombre, texte } from '../lib/format'
 import { classeStatut } from '../lib/statuts'
-import type { FileService } from '../lib/types'
+import type { DemandeTravauxApp, FileService } from '../lib/types'
 
 /**
  * File de travail du service — l'écran de Catherine, à l'atelier.
@@ -13,16 +14,28 @@ import type { FileService } from '../lib/types'
  * c'est ce qui bloque le service, donc ce qu'il faut voir en premier.
  */
 export function Service() {
+  const { aLeDroit } = useMoi()
   const [file, setFile] = useState<FileService[]>([])
+  const [demandes, setDemandes] = useState<DemandeTravauxApp[]>([])
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState<string | null>(null)
 
+  const voitDemandes = aLeDroit('travaux.completer') || aLeDroit('travaux.gerer')
+
   const charger = useCallback(async () => {
-    const { data, error } = await supabase.from('v_file_service_app').select('*')
-    if (error) setErreur(messageErreur(error))
-    else setFile((data ?? []) as unknown as FileService[])
+    const [f, d] = await Promise.all([
+      supabase.from('v_file_service_app').select('*'),
+      voitDemandes
+        ? supabase.from('v_demande_travaux_app').select('*').eq('statut', 'envoyee')
+            .order('envoyee_le')
+        : Promise.resolve({ data: [], error: null }),
+    ])
+    if (f.error) setErreur(messageErreur(f.error))
+    else if (d.error) setErreur(messageErreur(d.error))
+    setFile((f.data ?? []) as unknown as FileService[])
+    setDemandes((d.data ?? []) as unknown as DemandeTravauxApp[])
     setChargement(false)
-  }, [])
+  }, [voitDemandes])
 
   useEffect(() => { charger() }, [charger])
 
@@ -37,6 +50,38 @@ export function Service() {
       </p>
 
       {erreur && <p className="message-erreur">{erreur}</p>}
+
+      {voitDemandes && demandes.length > 0 && (
+        <section className="bloc">
+          <h2>
+            Demandes de travaux du concessionnaire
+            <span className="compte-etape">{demandes.length} en attente</span>
+          </h2>
+          <ul className="liste-vehicules">
+            {demandes.map((d) => (
+              <li key={d.id} className="carte-travaux">
+                <div className="vehicule-entete">
+                  <Link to={`/vehicule/${d.vehicule_id}/travaux`} className="no-stock lien-stock">
+                    {d.no_stock}
+                  </Link>
+                  <span className={classeStatut(d.statut_vehicule)}>{texte(d.statut_vehicule)}</span>
+                </div>
+                <div className="vehicule-titre">{texte(d.vehicule_titre)}</div>
+                <dl className="vehicule-details">
+                  <div><dt>Tâches</dt><dd>{nombre(d.nb_completees)} / {nombre(d.nb_lignes)} faites</dd></div>
+                  <div><dt>Envoyée par</dt><dd>{texte(d.envoyee_par_nom)}</dd></div>
+                </dl>
+                {d.notes && <p className="note sans-marge">{d.notes}</p>}
+                <div className="vehicule-actions">
+                  <Link to={`/vehicule/${d.vehicule_id}/travaux`} className="bouton-secondaire">
+                    Ouvrir la demande
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {file.length === 0 ? (
         <p className="note">

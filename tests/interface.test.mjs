@@ -56,7 +56,8 @@ const PROFILS = {
              'inspection.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer',
              'vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
              'vehicule.voir_couts', 'vehicule.voir_prix_achat', 'vehicule.voir_profit',
-             'vente.enregistrer', 'vente.financement', 'vente.livrer', 'lead.saisir'],
+             'vente.enregistrer', 'vente.financement', 'vente.livrer', 'lead.saisir',
+             'travaux.demander', 'travaux.gerer', 'travaux.completer'],
     masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
   },
   directeur: {
@@ -69,7 +70,8 @@ const PROFILS = {
              'vehicule.voir_prix_achat', 'vehicule.voir_couts', 'vehicule.voir_profit',
              'feuille.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer',
              'inspection.saisir', 'inspection.approuver', 'alerte.resoudre', 'affichage.voir',
-             'vente.enregistrer', 'vente.financement', 'lead.saisir'],
+             'vente.enregistrer', 'vente.financement', 'lead.saisir',
+             'travaux.demander', 'travaux.gerer'],
     masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
   },
   aviseur: {
@@ -79,7 +81,7 @@ const PROFILS = {
     },
     motDePasse: 'MotDePasseCat1',
     droits: ['vehicule.voir', 'vehicule.voir_couts', 'inspection.saisir',
-             'inspection.completer', 'saaq.completer', 'alerte.resoudre'],
+             'inspection.completer', 'saaq.completer', 'alerte.resoudre', 'travaux.completer'],
     masque: { prix_achat: null, profit: null, cout_base_engage: 1200, leads_total: null },
   },
   vendeur: {
@@ -88,7 +90,7 @@ const PROFILS = {
       role: 'vendeur', actif: true, auth_user_id: 'auth-ludo',
     },
     motDePasse: 'MotDePasseLudo1',
-    droits: ['vehicule.voir', 'affichage.voir'],
+    droits: ['vehicule.voir', 'affichage.voir', 'travaux.demander'],
     // Un vendeur ne voit aucun montant sensible : Postgres renvoie des null.
     masque: { prix_achat: null, profit: null, cout_base_engage: null, leads_total: null },
   },
@@ -99,6 +101,7 @@ const STATUTS = [
   { id: 2, nom: 'VÉHICULE REÇU', ordre: 2 },
   { id: 5, nom: 'MÉCANIQUE INTERNE', ordre: 5 },
   { id: 10, nom: 'DISPONIBLE', ordre: 10 },
+  { id: 17, nom: 'DEMANDE DE TRAVAUX', ordre: 17 },
 ]
 
 function vehiculeDemo(profil) {
@@ -154,6 +157,22 @@ async function scenario(navigateur, cle) {
     { id: 'l2', no_ligne: 2, description: 'Pare-brise à remplacer', code_reparation_id: 2,
       cout: 450, complete: false, complete_le: null, decision: 'en_attente', decide_le: null },
   ]
+  // L'aviseur teste la complétion d'une demande déjà envoyée par quelqu'un
+  // d'autre — chaque profil tourne dans son propre contexte isolé, donc la
+  // demande ne peut pas venir d'une étape « vendeur » précédente du même run.
+  let demandesTravaux = cle === 'aviseur' ? [{
+    id: 'dt-1', vehicule_id: 'veh-1', no_stock: 'A1234', vehicule_titre: '2021 HONDA ACCORD SPORT',
+    statut_vehicule: 'MÉCANIQUE INTERNE', statut: 'envoyee', notes: 'Vendu — préparation livraison',
+    cree_par_nom: 'Ludovick Borris', cree_le: '2026-08-15T10:00:00Z',
+    envoyee_par_nom: 'Steve Costa', envoyee_le: '2026-08-15T11:00:00Z',
+    completee_le: null, annulee_le: null, motif_annulation: null,
+  }] : []
+  let lignesTravaux = cle === 'aviseur' ? [
+    { id: 'dtl-1', demande_id: 'dt-1', no_ligne: 1, categorie: 'preparation_livraison',
+      description: 'Remplir un quart de réservoir', complete: false, complete_le: null, complete_par: null },
+    { id: 'dtl-2', demande_id: 'dt-1', no_ligne: 2, categorie: 'esthetique',
+      description: 'Réparer le miroir', complete: false, complete_le: null, complete_par: null },
+  ] : []
 
   // LARGEUR permet de rejouer le scénario sur un grand écran, là où le
   // centrage de la colonne se vérifie.
@@ -427,6 +446,63 @@ async function scenario(navigateur, cle) {
       }))
     }
 
+    if (chemin === '/rest/v1/v_demande_travaux_app') {
+      const params = new AdresseURL(req.url()).searchParams
+      const filtres = [...params.entries()].filter(([c]) => c !== 'select' && c !== 'order')
+      const avecCompte = demandesTravaux.map((d) => ({
+        ...d,
+        nb_lignes: lignesTravaux.filter((l) => l.demande_id === d.id).length,
+        nb_completees: lignesTravaux.filter((l) => l.demande_id === d.id && l.complete).length,
+      }))
+      const liste = avecCompte.filter((d) =>
+        filtres.every(([champ, valeur]) => String(d[champ]) === valeur.replace('eq.', '')))
+      return route.fulfill(json(liste))
+    }
+    if (chemin === '/rest/v1/demande_travaux_ligne') {
+      const params = new AdresseURL(req.url()).searchParams
+      if (methode === 'POST') {
+        const corps = JSON.parse(req.postData() || '{}')
+        appels.push({ fonction: 'demande_travaux_ligne', methode, p: corps })
+        lignesTravaux = [...lignesTravaux, {
+          id: `dtl-${lignesTravaux.length + 1}`, complete: false, complete_le: null, complete_par: null,
+          ...corps,
+        }]
+        return route.fulfill(json([], 201))
+      }
+      if (methode === 'PATCH') {
+        const corps = JSON.parse(req.postData() || '{}')
+        const idLigne = (params.get('id') || '').replace('eq.', '')
+        appels.push({ fonction: 'demande_travaux_ligne', methode, p: corps })
+        lignesTravaux = lignesTravaux.map((l) => (l.id === idLigne ? { ...l, ...corps } : l))
+
+        // Réplique le trigger fn_completer_demande_travaux.
+        const ligne = lignesTravaux.find((l) => l.id === idLigne)
+        if (ligne && 'complete' in corps) {
+          const soeurs = lignesTravaux.filter((l) => l.demande_id === ligne.demande_id)
+          const toutesFaites = soeurs.every((l) => l.complete)
+          demandesTravaux = demandesTravaux.map((d) => {
+            if (d.id !== ligne.demande_id) return d
+            if (toutesFaites && d.statut === 'envoyee') {
+              return { ...d, statut: 'completee', completee_le: new Date().toISOString() }
+            }
+            if (!toutesFaites && d.statut === 'completee') {
+              return { ...d, statut: 'envoyee', completee_le: null }
+            }
+            return d
+          })
+        }
+        return route.fulfill(json([]))
+      }
+      if (methode === 'DELETE') {
+        const idLigne = (params.get('id') || '').replace('eq.', '')
+        appels.push({ fonction: 'demande_travaux_ligne', methode, p: idLigne })
+        lignesTravaux = lignesTravaux.filter((l) => l.id !== idLigne)
+        return route.fulfill(json([]))
+      }
+      const idDemande = (params.get('demande_id') || '').replace('eq.', '')
+      return route.fulfill(json(lignesTravaux.filter((l) => l.demande_id === idDemande)))
+    }
+
     if (chemin.startsWith('/rest/v1/rpc/')) {
       const fonction = chemin.replace('/rest/v1/rpc/', '')
       const p = JSON.parse(req.postData() || '{}')
@@ -464,6 +540,30 @@ async function scenario(navigateur, cle) {
         vehicule = { ...vehicule, statut: 'LIVRÉ' }
         ventes = ventes.map((x) => ({ ...x, etat: 'livre', livre_le: new Date().toISOString(),
           statut_vehicule: 'LIVRÉ' }))
+      }
+      if (fonction === 'creer_demande_travaux') {
+        const id = `dt-${demandesTravaux.length + 1}`
+        demandesTravaux = [...demandesTravaux, {
+          id, vehicule_id: p.p_vehicule, no_stock: vehicule.no_stock,
+          vehicule_titre: vehicule.vehicule_titre, statut_vehicule: vehicule.statut,
+          statut: 'brouillon', notes: p.p_notes,
+          cree_par_nom: profil.utilisateur.nom, cree_le: new Date().toISOString(),
+          envoyee_par_nom: null, envoyee_le: null, completee_le: null,
+          annulee_le: null, motif_annulation: null,
+        }]
+        return route.fulfill(json(id))
+      }
+      if (fonction === 'envoyer_demande_travaux') {
+        vehicule = { ...vehicule, statut: 'DEMANDE DE TRAVAUX' }
+        demandesTravaux = demandesTravaux.map((d) => (d.id === p.p_demande
+          ? { ...d, statut: 'envoyee', envoyee_par_nom: profil.utilisateur.nom,
+              envoyee_le: new Date().toISOString() }
+          : d))
+      }
+      if (fonction === 'annuler_demande_travaux') {
+        demandesTravaux = demandesTravaux.map((d) => (d.id === p.p_demande
+          ? { ...d, statut: 'annulee', motif_annulation: p.p_motif, annulee_le: new Date().toISOString() }
+          : d))
       }
       return route.fulfill(json(fonction === 'creer_vehicule' ? 'veh-1' : null))
     }
@@ -679,6 +779,11 @@ async function scenario(navigateur, cle) {
     note(`${prefixe} — alerte SAAQ visible dans la file`,
          (await page.locator('.alerte.critique').count()) >= 1)
 
+    if (cle === 'aviseur') {
+      note(`${prefixe} — demande de travaux du concessionnaire visible dans la file`,
+           (await page.locator('.carte-travaux').count()) === 1)
+    }
+
     await page.locator('a:has-text("Ouvrir l’inspection")').first().click()
     await page.waitForSelector('.lignes-inspection', { timeout: 15000 })
     note(`${prefixe} — inspection ouverte, lignes affichées`,
@@ -757,6 +862,78 @@ async function scenario(navigateur, cle) {
     }
 
     await page.screenshot({ path: `apercu-ventes-${cle}.png`, fullPage: true })
+  }
+
+  // --- Demande de travaux : l'envers de l'inspection ---
+  const voitTravaux = ['travaux.demander', 'travaux.gerer', 'travaux.completer']
+    .some((d) => profil.droits.includes(d))
+
+  await page.click('nav a:has-text("Véhicules")')
+  await page.waitForSelector('.liste-vehicules', { timeout: 15000 })
+  await page.locator('.vehicule-actions a:has-text("Ouvrir la fiche")').first().click()
+  await page.waitForSelector('.fiche-entete', { timeout: 15000 })
+
+  const blocTravaux = await page.locator('.bloc:has-text("Demande de travaux")').count()
+  note(`${prefixe} — bloc « Demande de travaux » ${voitTravaux ? 'présent' : 'masqué'} sur la fiche`,
+       (blocTravaux > 0) === voitTravaux)
+
+  if (voitTravaux) {
+    await page.click('a:has-text("Ouvrir la demande de travaux")')
+    await page.waitForSelector('.fiche-entete', { timeout: 15000 })
+
+    const peutComposer = profil.droits.includes('travaux.demander') || profil.droits.includes('travaux.gerer')
+    const peutGerer = profil.droits.includes('travaux.gerer')
+
+    if (cle === 'aviseur') {
+      // Une demande déjà envoyée par le concessionnaire attend le service.
+      note(`${prefixe} — demande envoyée affichée avec ses deux tâches`,
+           (await page.locator('.ligne-inspection').count()) === 2)
+
+      const premiereCase = page.locator('.ligne-inspection').first().locator('input[type=checkbox]')
+      note(`${prefixe} — case à cocher présente (travaux.completer)`,
+           (await premiereCase.count()) === 1)
+
+      // `.click()` plutôt que `.check()` : la case se désactive le temps de
+      // l'appel (comme dans Inspection.tsx), donc l'assertion intégrée de
+      // Playwright sur l'état coché la surprend en plein aller-retour réseau.
+      await premiereCase.click()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — travail marqué fait`,
+           appels.some((a) => a.fonction === 'demande_travaux_ligne' && a.methode === 'PATCH'
+                           && a.p.complete === true))
+      note(`${prefixe} — case cochée après le retour serveur`, await premiereCase.isChecked())
+    } else if (peutComposer) {
+      note(`${prefixe} — formulaire de création proposé`,
+           (await page.locator('button:has-text("Nouvelle demande")').count()) === 1)
+
+      await page.click('button:has-text("Nouvelle demande")')
+      await page.fill('textarea[name=notes]', 'Vendu — remplir essence, réparer miroir')
+      await page.click('button:has-text("Créer la demande")')
+      await page.waitForTimeout(900)
+      note(`${prefixe} — creer_demande_travaux appelé`,
+           appels.some((a) => a.fonction === 'creer_demande_travaux'))
+
+      await page.fill('input[name=description]', 'Réparer le miroir')
+      await page.click('button:has-text("Ajouter la tâche")')
+      await page.waitForTimeout(900)
+      note(`${prefixe} — ligne ajoutée à la demande`,
+           appels.some((a) => a.fonction === 'demande_travaux_ligne' && a.methode === 'POST'))
+
+      const boutonEnvoyer = page.locator('button:has-text("Envoyer au service")')
+      note(`${prefixe} — bouton « Envoyer au service » ${peutGerer ? 'présent' : 'masqué'}`,
+           ((await boutonEnvoyer.count()) > 0) === peutGerer)
+
+      if (peutGerer) {
+        await boutonEnvoyer.click()
+        await page.waitForTimeout(900)
+        note(`${prefixe} — envoyer_demande_travaux appelé`,
+             appels.some((a) => a.fonction === 'envoyer_demande_travaux'))
+        note(`${prefixe} — le véhicule est déplacé, affiché sur sa propre fiche`,
+             (await page.locator('.statut.gros').first().textContent())?.includes('DEMANDE DE TRAVAUX'))
+      }
+    }
+
+    await page.screenshot({ path: `apercu-travaux-${cle}.png`, fullPage: true })
   }
 
   // --- Tableaux de bord ---
@@ -910,6 +1087,7 @@ const TOUS_LES_DROITS = [
   'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir', 'vehicule.voir_couts',
   'vehicule.voir_prix_achat', 'vehicule.voir_profit',
   'vente.enregistrer', 'vente.financement', 'vente.livrer', 'lead.saisir',
+  'travaux.demander', 'travaux.gerer', 'travaux.completer',
 ]
 const couverts = new Set(Object.values(PROFILS).flatMap((p) => p.droits))
 const orphelins = TOUS_LES_DROITS.filter((d) => !couverts.has(d))

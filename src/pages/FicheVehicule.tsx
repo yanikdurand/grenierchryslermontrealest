@@ -358,6 +358,20 @@ export function FicheVehicule() {
         </section>
       )}
 
+      {(aLeDroit('travaux.demander') || aLeDroit('travaux.gerer') || aLeDroit('travaux.completer')) && (
+        <section className="bloc">
+          <h2>Demande de travaux</h2>
+          <p className="note sans-marge">
+            Envoyer une requête numérique au service — l’envers de l’inspection.
+          </p>
+          <div className="vehicule-actions espace-haut">
+            <Link to={`/vehicule/${v.id}/travaux`} className="bouton-secondaire">
+              Ouvrir la demande de travaux
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="bloc">
         <h2>Pneus</h2>
         {pneus.length === 0 ? (
