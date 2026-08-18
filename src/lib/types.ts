@@ -198,6 +198,7 @@ export type InspectionStatut = {
   valeur_garantie: number | null
   cout_evite: number | null
   cree_le: string
+  technicien: string | null
 }
 
 export type LigneInspection = {
@@ -210,6 +211,10 @@ export type LigneInspection = {
   complete_le: string | null
   decision: Decision
   decide_le: string | null
+  sous_garantie: boolean
+  garantie_lieu: string | null
+  garantie_rdv: string | null
+  garantie_retour_le: string | null
 }
 
 export type CodeReparation = {

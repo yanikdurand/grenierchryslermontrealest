@@ -10,12 +10,16 @@ import type {
   LigneInspection, VehiculeApp,
 } from '../lib/types'
 
-/** Les quatre décisions que prennent Yanik et Steve, ligne par ligne. */
+/**
+ * La garantie n'est plus une décision du directeur : c'est l'aviseur qui la
+ * détermine en bâtissant l'inspection (case « Sous garantie », plus bas),
+ * après avoir vérifié la couverture et appelé le concessionnaire de la
+ * marque. Il ne reste donc que trois décisions ici.
+ */
 const DECISIONS: { valeur: Decision; libelle: string; aide: string }[] = [
   { valeur: 'ne_pas_faire', libelle: 'Ne pas faire', aide: 'On ne la fait pas.' },
   { valeur: 'de_base', libelle: 'De base', aide: 'Faite maintenant — gruge la marge du véhicule.' },
   { valeur: 'signature', libelle: 'Signature', aide: 'Seulement si le client achète le programme Signature.' },
-  { valeur: 'garantie', libelle: 'Garantie', aide: 'Couverte par le manufacturier — aucun coût pour nous.' },
 ]
 
 export function Inspection() {
@@ -37,6 +41,7 @@ export function Inspection() {
   const peutApprouver = aLeDroit('inspection.approuver')
   const peutCompleter = aLeDroit('inspection.completer')
   const peutSaaq = aLeDroit('saaq.completer')
+  const peutGarantie = aLeDroit('inspection.garantie')
 
   const charger = useCallback(async () => {
     if (!id) return
@@ -64,7 +69,8 @@ export function Inspection() {
     if (inspection) {
       const { data: l } = await supabase
         .from('inspection_ligne')
-        .select('id, no_ligne, description, code_reparation_id, cout, complete, complete_le, decision, decide_le')
+        .select(`id, no_ligne, description, code_reparation_id, cout, complete, complete_le,
+                 decision, decide_le, sous_garantie, garantie_lieu, garantie_rdv, garantie_retour_le`)
         .eq('inspection_id', inspection.inspection_id)
         .order('no_ligne')
       const listeLignes = (l ?? []) as LigneInspection[]
@@ -119,6 +125,7 @@ export function Inspection() {
       description,
       cout: coutBrut === '' ? null : Number(coutBrut),
       code_reparation_id: codeBrut === '' ? null : Number(codeBrut),
+      ...(peutGarantie ? { sous_garantie: donnees.get('sous_garantie') === 'on' } : {}),
     })
 
     if (error) setErreur(messageErreur(error))
@@ -143,6 +150,52 @@ export function Inspection() {
     setAction(`complete-${ligne.id}`); setErreur(null); setSucces(null)
     const { error } = await supabase
       .from('inspection_ligne').update({ complete: !ligne.complete }).eq('id', ligne.id)
+    if (error) setErreur(messageErreur(error))
+    else await charger()
+    setAction(null)
+  }
+
+  /** Cocher pose la garantie ; décocher rend la ligne au directeur (§ trigger). */
+  async function basculerGarantie(ligne: LigneInspection) {
+    setAction(`garantie-${ligne.id}`); setErreur(null); setSucces(null)
+    const { error } = await supabase
+      .from('inspection_ligne').update({ sous_garantie: !ligne.sous_garantie }).eq('id', ligne.id)
+    if (error) setErreur(messageErreur(error))
+    else await charger()
+    setAction(null)
+  }
+
+  /** Planifier le rendez-vous déplace le véhicule en mécanique externe (trigger). */
+  async function planifierGarantie(ligne: LigneInspection, e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const d = new FormData(e.currentTarget)
+    const rdv = String(d.get('rdv') ?? '')
+    setAction(`planifier-${ligne.id}`); setErreur(null); setSucces(null)
+    const { error } = await supabase.from('inspection_ligne').update({
+      garantie_lieu: String(d.get('lieu') ?? '').trim() || null,
+      garantie_rdv: rdv ? new Date(rdv).toISOString() : null,
+    }).eq('id', ligne.id)
+    if (error) setErreur(messageErreur(error))
+    else { await charger(); setSucces('Rendez-vous planifié. Le véhicule est passé en mécanique externe.') }
+    setAction(null)
+  }
+
+  async function marquerRetour(ligne: LigneInspection) {
+    setAction(`retour-${ligne.id}`); setErreur(null); setSucces(null)
+    const { error } = await supabase
+      .from('inspection_ligne').update({ garantie_retour_le: new Date().toISOString() }).eq('id', ligne.id)
+    if (error) setErreur(messageErreur(error))
+    else { await charger(); setSucces('Retour du véhicule enregistré.') }
+    setAction(null)
+  }
+
+  async function sauverTechnicien(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!statut) return
+    const technicien = String(new FormData(e.currentTarget).get('technicien') ?? '').trim()
+    setAction('technicien'); setErreur(null)
+    const { error } = await supabase
+      .from('inspection').update({ technicien: technicien || null }).eq('id', statut.inspection_id)
     if (error) setErreur(messageErreur(error))
     else await charger()
     setAction(null)
@@ -189,6 +242,27 @@ export function Inspection() {
 
       {erreur && <p className="message-erreur">{erreur}</p>}
       {succes && <p className="bandeau-succes">{succes}</p>}
+
+      {(v.garantie_complete || v.garantie_motopropulseur || v.garantie_prolongee) ? (
+        <section className="bloc">
+          <h2>Garanties du véhicule</h2>
+          <dl className="fiche-grille">
+            {v.garantie_complete && <div className="ligne"><dt>Complète</dt><dd>{v.garantie_complete}</dd></div>}
+            {v.garantie_motopropulseur && (
+              <div className="ligne"><dt>Motopropulseur</dt><dd>{v.garantie_motopropulseur}</dd></div>
+            )}
+            {v.garantie_prolongee && (
+              <div className="ligne"><dt>Prolongée</dt><dd>{v.garantie_prolongee}</dd></div>
+            )}
+          </dl>
+          <p className="note">
+            À vérifier auprès du concessionnaire de la marque avant de désigner une réparation
+            sous garantie.
+          </p>
+        </section>
+      ) : (
+        <p className="note sans-marge">Aucune information de garantie enregistrée sur ce véhicule.</p>
+      )}
 
       {v.requiert_inspection_saaq && !v.saaq_complete_le && (
         <section className="bloc">
@@ -258,6 +332,16 @@ export function Inspection() {
                 et garantie n’y entrent jamais.
               </p>
             )}
+
+            {peutSaisir ? (
+              <form className="champ espace-haut" onSubmit={sauverTechnicien}>
+                <span>Technicien</span>
+                <input name="technicien" defaultValue={statut.technicien ?? ''}
+                       placeholder="Qui a fait l’inspection" onBlur={(e) => e.currentTarget.form?.requestSubmit()} />
+              </form>
+            ) : (
+              <p className="note sans-marge">Technicien : {texte(statut.technicien)}</p>
+            )}
           </section>
 
           <section className="bloc">
@@ -282,7 +366,59 @@ export function Inspection() {
                         {l.complete && <span className="fait">Fait{l.complete_le ? ` le ${dateCourte(l.complete_le)}` : ''}</span>}
                       </div>
 
-                      {peutApprouver && (
+                      {peutGarantie && (
+                        <label className="case">
+                          <input
+                            type="checkbox"
+                            checked={l.sous_garantie}
+                            disabled={action !== null}
+                            onChange={() => basculerGarantie(l)}
+                          />
+                          <span>Sous garantie</span>
+                        </label>
+                      )}
+
+                      {l.sous_garantie && (
+                        <div className="ligne-meta">
+                          {l.garantie_lieu && <span>Chez {l.garantie_lieu}</span>}
+                          {l.garantie_rdv && <span>Rendez-vous le {dateCourte(l.garantie_rdv)}</span>}
+                          {l.garantie_retour_le && <span className="fait">Revenu le {dateCourte(l.garantie_retour_le)}</span>}
+                        </div>
+                      )}
+
+                      {peutGarantie && l.sous_garantie && (
+                        <>
+                          <form
+                            className="formulaire-court"
+                            onSubmit={(e) => planifierGarantie(l, e)}
+                          >
+                            <label className="champ">
+                              <span>Lieu</span>
+                              <input name="lieu" defaultValue={l.garantie_lieu ?? ''} placeholder="Audi Brossard…" />
+                            </label>
+                            <label className="champ">
+                              <span>Rendez-vous</span>
+                              <input
+                                name="rdv" type="datetime-local"
+                                defaultValue={l.garantie_rdv ? l.garantie_rdv.slice(0, 16) : ''}
+                              />
+                            </label>
+                            <button type="submit" className="bouton-secondaire" disabled={action !== null}>
+                              {action === `planifier-${l.id}` ? 'Enregistrement…' : 'Planifier'}
+                            </button>
+                          </form>
+                          {l.garantie_rdv && !l.garantie_retour_le && (
+                            <button
+                              type="button" className="bouton-discret" disabled={action !== null}
+                              onClick={() => marquerRetour(l)}
+                            >
+                              {action === `retour-${l.id}` ? 'Enregistrement…' : 'Marquer le retour du véhicule'}
+                            </button>
+                          )}
+                        </>
+                      )}
+
+                      {peutApprouver && !l.sous_garantie && (
                         <div className="boutons-decision">
                           {DECISIONS.map((d) => (
                             <button
@@ -338,6 +474,12 @@ export function Inspection() {
                     <input name="cout" type="number" min={0} step="1" inputMode="numeric" />
                   </label>
                 </div>
+                {peutGarantie && (
+                  <label className="case">
+                    <input type="checkbox" name="sous_garantie" />
+                    <span>Sous garantie</span>
+                  </label>
+                )}
                 <button type="submit" className="bouton-secondaire" disabled={action !== null}>
                   {action === 'ajouter' ? 'Ajout…' : 'Ajouter la ligne'}
                 </button>

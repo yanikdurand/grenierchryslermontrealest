@@ -57,7 +57,7 @@ const PROFILS = {
              'vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
              'vehicule.voir_couts', 'vehicule.voir_prix_achat', 'vehicule.voir_profit',
              'vente.enregistrer', 'vente.financement', 'vente.livrer', 'lead.saisir',
-             'travaux.demander', 'travaux.gerer', 'travaux.completer'],
+             'travaux.demander', 'travaux.gerer', 'travaux.completer', 'inspection.garantie'],
     masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
   },
   directeur: {
@@ -81,7 +81,8 @@ const PROFILS = {
     },
     motDePasse: 'MotDePasseCat1',
     droits: ['vehicule.voir', 'vehicule.voir_couts', 'inspection.saisir',
-             'inspection.completer', 'saaq.completer', 'alerte.resoudre', 'travaux.completer'],
+             'inspection.completer', 'saaq.completer', 'alerte.resoudre', 'travaux.completer',
+             'inspection.garantie'],
     masque: { prix_achat: null, profit: null, cout_base_engage: 1200, leads_total: null },
   },
   vendeur: {
@@ -113,7 +114,8 @@ function vehiculeDemo(profil) {
     statut: 'VÉHICULE REÇU', statut_ordre: 2, fournisseur: 'Encan', fournisseur_autre: null,
     nb_clefs: 2, nb_passagers: 5, pnbv: 2100, etat_carrosserie: 'Bon', etat_pare_brise: 'Éclat',
     rappels: null, notes: 'Deuxième jeu de pneus inclus.',
-    garantie_complete: null, garantie_motopropulseur: null, garantie_prolongee: null,
+    garantie_complete: '3 ans / 60 000 km, jusqu’au 2027-05-01', garantie_motopropulseur: null,
+    garantie_prolongee: null,
     lien_carfax: 'https://carfax.ca/exemple', lien_existant: true,
     lien_existant_note: 'Solde chez Desjardins',
     requiert_inspection_saaq: true, saaq_rdv_le: null, saaq_complete_le: null,
@@ -153,10 +155,13 @@ async function scenario(navigateur, cle) {
   let visites = []
   let lignes = [
     { id: 'l1', no_ligne: 1, description: 'Pneus à changer', code_reparation_id: 1,
-      cout: 800, complete: false, complete_le: null, decision: 'en_attente', decide_le: null },
+      cout: 800, complete: false, complete_le: null, decision: 'en_attente', decide_le: null,
+      sous_garantie: false, garantie_lieu: null, garantie_rdv: null, garantie_retour_le: null },
     { id: 'l2', no_ligne: 2, description: 'Pare-brise à remplacer', code_reparation_id: 2,
-      cout: 450, complete: false, complete_le: null, decision: 'en_attente', decide_le: null },
+      cout: 450, complete: false, complete_le: null, decision: 'en_attente', decide_le: null,
+      sous_garantie: false, garantie_lieu: null, garantie_rdv: null, garantie_retour_le: null },
   ]
+  let technicien = null
   // L'aviseur teste la complétion d'une demande déjà envoyée par quelqu'un
   // d'autre — chaque profil tourne dans son propre contexte isolé, donc la
   // demande ne peut pas venir d'une étape « vendeur » précédente du même run.
@@ -411,14 +416,39 @@ async function scenario(navigateur, cle) {
         const corps = JSON.parse(req.postData() || '{}')
         const cible = new AdresseURL(req.url()).searchParams.get('id') || ''
         const idLigne = cible.replace('eq.', '')
-        appels.push({ fonction: 'inspection_ligne', p: corps })
+        appels.push({ fonction: 'inspection_ligne', methode, p: corps })
+        // Réplique fn_garde_inspection_ligne : sous_garantie pilote decision.
+        if ('sous_garantie' in corps) {
+          if (corps.sous_garantie) corps.decision = 'garantie'
+          else {
+            const avant = lignes.find((l) => l.id === idLigne)
+            if (avant?.decision === 'garantie') corps.decision = 'en_attente'
+            corps.garantie_lieu = null
+            corps.garantie_rdv = null
+            corps.garantie_retour_le = null
+          }
+        }
+        // Réplique fn_planifier_reparation_garantie : planifier déplace le véhicule.
+        if (corps.garantie_rdv) vehicule = { ...vehicule, statut: 'MÉCANIQUE EXTERNE' }
         lignes = lignes.map((l) => (l.id === idLigne ? { ...l, ...corps } : l))
         return route.fulfill(json([]))
       }
-      if (methode === 'POST') return route.fulfill(json([], 201))
+      if (methode === 'POST') {
+        const corps = JSON.parse(req.postData() || '{}')
+        appels.push({ fonction: 'inspection_ligne', methode, p: corps })
+        return route.fulfill(json([], 201))
+      }
       return route.fulfill(json(lignes))
     }
-    if (chemin === '/rest/v1/inspection') return route.fulfill(json([], 201))
+    if (chemin === '/rest/v1/inspection') {
+      if (methode === 'PATCH') {
+        const corps = JSON.parse(req.postData() || '{}')
+        appels.push({ fonction: 'inspection', methode, p: corps })
+        technicien = corps.technicien ?? technicien
+        return route.fulfill(json([]))
+      }
+      return route.fulfill(json([], 201))
+    }
     if (chemin === '/rest/v1/v_file_service_app') {
       return route.fulfill(json([{
         vehicule_id: 'veh-1', no_stock: 'A1234', vehicule: '2021 HONDA ACCORD SPORT',
@@ -443,6 +473,7 @@ async function scenario(navigateur, cle) {
         valeur_garantie: voitCouts ? 0 : null,
         cout_evite: voitCouts ? 0 : null,
         cree_le: '2026-08-12T10:00:00Z',
+        technicien,
       }))
     }
 
@@ -794,6 +825,52 @@ async function scenario(navigateur, cle) {
     const texteInspection = await page.locator('.page').textContent()
     note(`${prefixe} — totaux ${voitCouts ? 'affichés' : 'masqués'}`,
          texteInspection.includes('Coût de base') === voitCouts)
+    note(`${prefixe} — infos de garantie du véhicule affichées`,
+         texteInspection.includes('3 ans / 60 000 km'))
+    note(`${prefixe} — « Garantie » n'est plus un bouton de décision`,
+         (await page.locator('.boutons-decision button:has-text("Garantie")').count()) === 0)
+
+    // Sous garantie : réservé à `inspection.garantie`, jamais au directeur
+    const peutGarantie = profil.droits.includes('inspection.garantie')
+    const premiereCaseGarantie = page.locator('.ligne-inspection').first().locator('label.case:has-text("Sous garantie") input')
+    note(`${prefixe} — case « Sous garantie » ${peutGarantie ? 'présente' : 'masquée'}`,
+         (await premiereCaseGarantie.count() > 0) === peutGarantie)
+
+    if (peutGarantie) {
+      // `.click()` plutôt que `.check()` : la case se désactive le temps de
+      // l'appel, ce qui surprend l'assertion intégrée de Playwright.
+      await premiereCaseGarantie.click()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — cocher sous garantie pose decision=garantie`,
+           (await page.locator('.ligne-inspection').first().locator('.decision-actuelle').textContent())
+             ?.includes('Garantie'))
+      note(`${prefixe} — plus de boutons de décision sur une ligne sous garantie`,
+           (await page.locator('.ligne-inspection').first().locator('.bouton-decision').count()) === 0)
+
+      const formPlanif = page.locator('.ligne-inspection').first().locator('form.formulaire-court')
+      await formPlanif.locator('input[name=lieu]').fill('Audi Brossard')
+      await formPlanif.locator('input[name=rdv]').fill('2026-08-25T09:00')
+      await formPlanif.locator('button:has-text("Planifier")').click()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — rendez-vous de garantie planifié`,
+           appels.some((a) => a.fonction === 'inspection_ligne' && a.p.garantie_lieu === 'Audi Brossard'))
+      note(`${prefixe} — le véhicule est annoncé déplacé`,
+           (await page.locator('.bandeau-succes').textContent())?.includes('mécanique externe'))
+
+      const boutonRetour = page.locator('button:has-text("Marquer le retour du véhicule")')
+      note(`${prefixe} — bouton de retour disponible une fois planifié`,
+           (await boutonRetour.count()) === 1)
+      await boutonRetour.click()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — retour du véhicule enregistré`,
+           appels.some((a) => a.fonction === 'inspection_ligne' && a.p.garantie_retour_le))
+
+      await premiereCaseGarantie.click()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — décocher sous garantie rend la ligne au directeur`,
+           (await page.locator('.ligne-inspection').first().locator('.decision-actuelle').textContent())
+             ?.includes('En attente'))
+    }
 
     // Décisions : réservées à `inspection.approuver`
     const peutApprouver = profil.droits.includes('inspection.approuver')
@@ -816,6 +893,21 @@ async function scenario(navigateur, cle) {
     const peutSaisir = profil.droits.includes('inspection.saisir')
     note(`${prefixe} — formulaire d'ajout ${peutSaisir ? 'présent' : 'masqué'}`,
          ((await page.locator('form.ajout-ligne').count()) > 0) === peutSaisir)
+    note(`${prefixe} — case « Sous garantie » à l'ajout ${peutGarantie ? 'présente' : 'masquée'}`,
+         ((await page.locator('form.ajout-ligne input[name=sous_garantie]').count()) > 0) === peutGarantie)
+
+    // Technicien : champ éditable par inspection.saisir, texte simple sinon
+    if (peutSaisir) {
+      const champTechnicien = page.locator('input[name=technicien]')
+      await champTechnicien.fill('Marc Tremblay')
+      await champTechnicien.blur()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — technicien enregistré`,
+           appels.some((a) => a.fonction === 'inspection' && a.p.technicien === 'Marc Tremblay'))
+    } else {
+      note(`${prefixe} — technicien affiché en lecture seule`,
+           (await page.locator('input[name=technicien]').count()) === 0)
+    }
 
     // Bouton SAAQ : réservé à `saaq.completer`
     const peutSaaq = profil.droits.includes('saaq.completer')
@@ -1083,7 +1175,7 @@ try {
 const TOUS_LES_DROITS = [
   'admin.notifications', 'admin.permissions', 'admin.utilisateurs', 'affichage.voir',
   'alerte.resoudre', 'feuille.saisir', 'inspection.approuver', 'inspection.completer',
-  'inspection.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer', 'vehicule.creer',
+  'inspection.saisir', 'inspection.garantie', 'lead.voir', 'rapport.voir', 'saaq.completer', 'vehicule.creer',
   'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir', 'vehicule.voir_couts',
   'vehicule.voir_prix_achat', 'vehicule.voir_profit',
   'vente.enregistrer', 'vente.financement', 'vente.livrer', 'lead.saisir',
