@@ -158,6 +158,9 @@ export function FicheVehicule() {
         </div>
         <div className="badges-statut">
           <span className={`${classeStatut(v.statut)} gros`}>{v.statut}</span>
+          {v.disponible_depuis && v.statut !== 'DISPONIBLE' && !v.vente_etat && (
+            <span className="statut statut-disponible gros">Disponible</span>
+          )}
           {v.vente_etat && (
             <span className={`${classeEtatVente(v.vente_etat)} gros`}>{libelleVente(v)}</span>
           )}
