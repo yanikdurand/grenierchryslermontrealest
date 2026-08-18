@@ -51,14 +51,14 @@ export function Inventaire() {
   const saaqSeulement = params.get('saaq') === '1'
   const venduSeulement = params.get('vendu') === '1'
 
-  function filtrer(suivant: { statut?: string; critiques?: boolean; saaq?: boolean; vendu?: boolean }) {
+  const filtrer = useCallback((suivant: { statut?: string; critiques?: boolean; saaq?: boolean; vendu?: boolean }) => {
     const p = new URLSearchParams()
     if (suivant.statut) p.set('statut', suivant.statut)
     if (suivant.critiques) p.set('critiques', '1')
     if (suivant.saaq) p.set('saaq', '1')
     if (suivant.vendu) p.set('vendu', '1')
     setParams(p, { replace: true })
-  }
+  }, [setParams])
 
   const charger = useCallback(async () => {
     setErreur(null)
@@ -158,7 +158,7 @@ export function Inventaire() {
       })
     }
     return base
-  }, [vehicules, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement])
+  }, [vehicules, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement, filtrer])
 
   /** Moyennes suivies sur le tableau de bord Airtable. */
   const moyennes = useMemo(() => {

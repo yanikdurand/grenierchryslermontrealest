@@ -1,22 +1,9 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useMoi } from '../auth/MoiContexte'
+import { etiquetteRole } from '../lib/roles'
 import { Icone } from './Icone'
 import type { NomIcone } from './Icone'
-
-const ETIQUETTES_ROLE: Record<string, string> = {
-  admin: 'Administrateur',
-  directeur: 'Directeur',
-  directeur_service: 'Directeur service',
-  gestionnaire_inventaire: 'Gestionnaire d’inventaire',
-  aviseur: 'Aviseur technique',
-  receptionniste: 'Réception',
-  proprietaire: 'Propriétaire',
-  vendeur: 'Vendeur',
-  comptabilite: 'Comptabilité',
-  financement: 'Financement',
-  livraison: 'Livraison',
-}
 
 type Entree = {
   vers: string
@@ -152,7 +139,7 @@ export function MiseEnPage() {
             <span className="lateral-identite">
               <span className="nom">{utilisateur?.nom}</span>
               <span className="role">
-                {utilisateur ? (ETIQUETTES_ROLE[utilisateur.role] ?? utilisateur.role) : ''}
+                {etiquetteRole(utilisateur?.role)}
               </span>
             </span>
           </div>

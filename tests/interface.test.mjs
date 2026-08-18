@@ -12,8 +12,8 @@
 import { chromium } from 'playwright'
 import { URL as AdresseURL } from 'node:url'
 
-const ADRESSE = 'http://127.0.0.1:5173/'
-const CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
+const ADRESSE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173/'
+const cheminChrome = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
 
 const etapes = []
 function note(nom, ok, detail = '') {
@@ -1200,7 +1200,7 @@ async function scenario(navigateur, cle) {
 
 // --- Exécution --------------------------------------------------------------
 
-const navigateur = await chromium.launch({ executablePath: CHROME })
+const navigateur = await chromium.launch(cheminChrome ? { executablePath: cheminChrome } : {})
 try {
   await scenario(navigateur, 'reception')
   await scenario(navigateur, 'gestionnaire')

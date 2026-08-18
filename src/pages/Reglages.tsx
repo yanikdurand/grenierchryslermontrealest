@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { messageErreur } from '../lib/erreurs'
 import { useMoi } from '../auth/MoiContexte'
 import { texte } from '../lib/format'
+import { etiquetteRole } from '../lib/roles'
 import type { Utilisateur } from '../lib/types'
 
 type Permission = { code: string; libelle: string | null; categorie: string | null; ordre: number | null }
@@ -15,18 +16,6 @@ type Evenement = { code: string; libelle: string | null; actif: boolean }
 type Destinataire = {
   id: string; evenement_code: string; utilisateur_id: string | null
   courriel: string | null; actif: boolean
-}
-
-const ETIQUETTES_ROLE: Record<string, string> = {
-  admin: 'Administrateur',
-  directeur: 'Directeur',
-  directeur_service: 'Directeur service',
-  gestionnaire_inventaire: 'Gestionnaire d’inventaire',
-  aviseur: 'Aviseur technique',
-  receptionniste: 'Réception',
-  proprietaire: 'Propriétaire',
-  vendeur: 'Vendeur',
-  comptabilite: 'Comptabilité',
 }
 
 export function Reglages() {
@@ -130,7 +119,7 @@ export function Reglages() {
       setErreur(messageErreur(error))
       return
     }
-    setSucces(`Droit ${accorder ? 'accordé' : 'retiré'} pour ${ETIQUETTES_ROLE[role] ?? role}.`)
+    setSucces(`Droit ${accorder ? 'accordé' : 'retiré'} pour ${etiquetteRole(role)}.`)
   }
 
   // --- Exceptions nominatives ----------------------------------------------
@@ -229,7 +218,7 @@ export function Reglages() {
                         }
                       >
                         {roles.map((r) => (
-                          <option key={r} value={r}>{ETIQUETTES_ROLE[r] ?? r}</option>
+                          <option key={r} value={r}>{etiquetteRole(r)}</option>
                         ))}
                       </select>
                     </td>
@@ -267,7 +256,7 @@ export function Reglages() {
               <label className="champ">
                 <span>Rôle</span>
                 <select name="role" required defaultValue="vendeur">
-                  {roles.map((r) => <option key={r} value={r}>{ETIQUETTES_ROLE[r] ?? r}</option>)}
+                  {roles.map((r) => <option key={r} value={r}>{etiquetteRole(r)}</option>)}
                 </select>
               </label>
             </div>
@@ -293,7 +282,7 @@ export function Reglages() {
               <thead>
                 <tr>
                   <th className="colle">Droit</th>
-                  {roles.map((r) => <th key={r} className="pivot">{ETIQUETTES_ROLE[r] ?? r}</th>)}
+                  {roles.map((r) => <th key={r} className="pivot">{etiquetteRole(r)}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -309,7 +298,7 @@ export function Reglages() {
                           type="checkbox"
                           checked={aLeDroitRole(r, p.code)}
                           disabled={action !== null}
-                          aria-label={`${p.libelle ?? p.code} pour ${ETIQUETTES_ROLE[r] ?? r}`}
+                          aria-label={`${p.libelle ?? p.code} pour ${etiquetteRole(r)}`}
                           onChange={(e) => basculerRole(r, p.code, e.target.checked)}
                         />
                       </td>
