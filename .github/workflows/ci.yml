@@ -1,0 +1,72 @@
+name: Qualité
+
+on:
+  push:
+  pull_request:
+
+env:
+  VITE_SUPABASE_URL: https://test.supabase.co
+  VITE_SUPABASE_CLE: sb_publishable_factice
+
+jobs:
+  qualite:
+    name: Vérifications
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Vérifier ESLint
+        run: npm run lint
+
+      - name: Vérifier TypeScript
+        run: npm run verifier
+
+      - name: Construire l’application
+        run: npm run build
+
+  e2e:
+    name: Test d’interface
+    needs: qualite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Installer Chromium
+        run: npm run test:e2e:install
+
+      - name: Construire l’application
+        run: npm run build
+
+      - name: Démarrer le serveur statique
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 5173 > /tmp/serveur-vite.log 2>&1 &
+          echo $! > /tmp/serveur-vite.pid
+          for tentative in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:5173/ >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Exécuter le test d’interface
+        run: npm run test:e2e
