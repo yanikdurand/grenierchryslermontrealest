@@ -11,6 +11,8 @@ pour que cette base soit utilisable depuis un navigateur (voir
 
 ## Démarrer
 
+Node.js 22 ou plus récent est requis (`.nvmrc`).
+
 ```bash
 npm install
 cp .env.example .env     # renseigner VITE_SUPABASE_CLE
@@ -22,9 +24,11 @@ npm run dev
 | Commande | Rôle |
 |---|---|
 | `npm run dev` | Serveur de développement |
+| `npm run lint` | Vérification ESLint |
 | `npm run build` | Vérification TypeScript puis build de production |
 | `npm run verifier` | Vérification TypeScript seule |
-| `node tests/interface.test.mjs` | Test de bout en bout de l'interface (serveur de dev requis) |
+| `npm run test:e2e:install` | Installation de Chromium pour le test d'interface |
+| `npm run test:e2e` | Test de bout en bout de l'interface (serveur de dev requis) |
 
 ## Règles à respecter
 
