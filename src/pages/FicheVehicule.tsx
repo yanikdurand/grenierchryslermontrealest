@@ -361,6 +361,27 @@ export function FicheVehicule() {
         </section>
       )}
 
+      {v.garantie_rdv && (
+        <section className="bloc">
+          <h2>Réparation sous garantie</h2>
+          <dl className="fiche-grille">
+            <Ligne etiquette="Description" valeur={texte(v.garantie_description)} />
+            <Ligne etiquette="Lieu" valeur={texte(v.garantie_lieu)} />
+            <Ligne etiquette="Rendez-vous" valeur={date(v.garantie_rdv)} />
+            {v.garantie_parti_le && <Ligne etiquette="Parti le" valeur={date(v.garantie_parti_le)} />}
+            {v.garantie_retour_le && <Ligne etiquette="Revenu le" valeur={date(v.garantie_retour_le)} />}
+          </dl>
+          {!v.garantie_parti_le && (
+            <p className="note sans-marge">
+              Le véhicule passera en mécanique externe à l’heure du rendez-vous.
+            </p>
+          )}
+          {v.garantie_parti_le && !v.garantie_retour_le && (
+            <p className="note sans-marge">Véhicule parti — en attente de son retour.</p>
+          )}
+        </section>
+      )}
+
       {(aLeDroit('travaux.demander') || aLeDroit('travaux.gerer') || aLeDroit('travaux.completer')) && (
         <section className="bloc">
           <h2>Demande de travaux</h2>

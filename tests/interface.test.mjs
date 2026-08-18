@@ -156,10 +156,12 @@ async function scenario(navigateur, cle) {
   let lignes = [
     { id: 'l1', no_ligne: 1, description: 'Pneus à changer', code_reparation_id: 1,
       cout: 800, complete: false, complete_le: null, decision: 'en_attente', decide_le: null,
-      sous_garantie: false, garantie_lieu: null, garantie_rdv: null, garantie_retour_le: null },
+      sous_garantie: false, garantie_lieu: null, garantie_rdv: null, garantie_parti_le: null,
+      garantie_retour_le: null, garantie_statut_avant: null },
     { id: 'l2', no_ligne: 2, description: 'Pare-brise à remplacer', code_reparation_id: 2,
       cout: 450, complete: false, complete_le: null, decision: 'en_attente', decide_le: null,
-      sous_garantie: false, garantie_lieu: null, garantie_rdv: null, garantie_retour_le: null },
+      sous_garantie: false, garantie_lieu: null, garantie_rdv: null, garantie_parti_le: null,
+      garantie_retour_le: null, garantie_statut_avant: null },
   ]
   let technicien = null
   // L'aviseur teste la complétion d'une demande déjà envoyée par quelqu'un
@@ -306,6 +308,9 @@ async function scenario(navigateur, cle) {
       // Réplique le LATERAL join de la vraie vue : le dossier de vente vivant
       // s'affiche à côté du statut opérationnel, sans jamais l'écraser.
       const venteActive = ventes.find((x) => x.etat !== 'annule' && x.etat !== 'livre')
+      // Une garantie active passe avant une déjà résolue, comme dans la vraie vue.
+      const ligneGarantie = lignes.find((l) => l.sous_garantie && !l.garantie_retour_le)
+        ?? [...lignes].reverse().find((l) => l.sous_garantie)
       const avecVente = {
         ...vehicule,
         vente_id: venteActive?.id ?? null,
@@ -313,6 +318,11 @@ async function scenario(navigateur, cle) {
         vente_type_transaction: venteActive?.type_transaction ?? null,
         vente_force_dossier: venteActive?.force_dossier ?? null,
         vente_date_livraison_prevue: venteActive?.date_livraison_prevue ?? null,
+        garantie_description: ligneGarantie?.description ?? null,
+        garantie_lieu: ligneGarantie?.garantie_lieu ?? null,
+        garantie_rdv: ligneGarantie?.garantie_rdv ?? null,
+        garantie_parti_le: ligneGarantie?.garantie_parti_le ?? null,
+        garantie_retour_le: ligneGarantie?.garantie_retour_le ?? null,
       }
       // `maybeSingle()` demande un objet, la liste attend un tableau.
       const seul = (req.headers()['accept'] || '').includes('vnd.pgrst.object')
@@ -425,11 +435,19 @@ async function scenario(navigateur, cle) {
             if (avant?.decision === 'garantie') corps.decision = 'en_attente'
             corps.garantie_lieu = null
             corps.garantie_rdv = null
+            corps.garantie_parti_le = null
             corps.garantie_retour_le = null
+            corps.garantie_statut_avant = null
           }
         }
-        // Réplique fn_planifier_reparation_garantie : planifier déplace le véhicule.
-        if (corps.garantie_rdv) vehicule = { ...vehicule, statut: 'MÉCANIQUE EXTERNE' }
+        // Réplique le retour : complète la ligne, remet le véhicule où il était.
+        if (corps.garantie_retour_le) {
+          corps.complete = true
+          const avant = lignes.find((l) => l.id === idLigne)
+          if (vehicule.statut === 'MÉCANIQUE EXTERNE' && avant?.garantie_statut_avant) {
+            vehicule = { ...vehicule, statut: avant.garantie_statut_avant }
+          }
+        }
         lignes = lignes.map((l) => (l.id === idLigne ? { ...l, ...corps } : l))
         return route.fulfill(json([]))
       }
@@ -438,6 +456,17 @@ async function scenario(navigateur, cle) {
         appels.push({ fonction: 'inspection_ligne', methode, p: corps })
         return route.fulfill(json([], 201))
       }
+      // Réplique la tâche planifiée : l'heure du rendez-vous venue, le
+      // véhicule part réellement — jamais au moment de la planification.
+      lignes = lignes.map((l) => {
+        if (l.sous_garantie && l.garantie_rdv && !l.garantie_parti_le && !l.garantie_retour_le
+            && new Date(l.garantie_rdv).getTime() <= Date.now()) {
+          const statutAvant = vehicule.statut
+          vehicule = { ...vehicule, statut: 'MÉCANIQUE EXTERNE' }
+          return { ...l, garantie_parti_le: new Date().toISOString(), garantie_statut_avant: statutAvant }
+        }
+        return l
+      })
       return route.fulfill(json(lignes))
     }
     if (chemin === '/rest/v1/inspection') {
@@ -847,23 +876,39 @@ async function scenario(navigateur, cle) {
       note(`${prefixe} — plus de boutons de décision sur une ligne sous garantie`,
            (await page.locator('.ligne-inspection').first().locator('.bouton-decision').count()) === 0)
 
-      const formPlanif = page.locator('.ligne-inspection').first().locator('form.formulaire-court')
+      const premiereLigne = page.locator('.ligne-inspection').first()
+      const formPlanif = premiereLigne.locator('form.formulaire-court')
+
+      // Un rendez-vous futur planifie, mais ne déplace rien tout de suite.
       await formPlanif.locator('input[name=lieu]').fill('Audi Brossard')
-      await formPlanif.locator('input[name=rdv]').fill('2026-08-25T09:00')
+      await formPlanif.locator('input[name=rdv]').fill('2099-01-01T09:00')
       await formPlanif.locator('button:has-text("Planifier")').click()
       await page.waitForTimeout(900)
       note(`${prefixe} — rendez-vous de garantie planifié`,
            appels.some((a) => a.fonction === 'inspection_ligne' && a.p.garantie_lieu === 'Audi Brossard'))
-      note(`${prefixe} — le véhicule est annoncé déplacé`,
-           (await page.locator('.bandeau-succes').textContent())?.includes('mécanique externe'))
+      note(`${prefixe} — le véhicule reste ici en attendant l'heure du rendez-vous`,
+           (await page.locator('.bandeau-succes').textContent())?.includes('à l’heure prévue'))
+      note(`${prefixe} — pas encore parti`,
+           (await premiereLigne.locator('.ligne-meta').last().textContent())?.includes('encore ici'))
+      note(`${prefixe} — pas de bouton de retour avant le départ`,
+           (await page.locator('button:has-text("Marquer le retour du véhicule")').count()) === 0)
+
+      // Un rendez-vous déjà passé : la prochaine consultation constate le départ.
+      await formPlanif.locator('input[name=rdv]').fill('2020-01-01T09:00')
+      await formPlanif.locator('button:has-text("Planifier")').click()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — le véhicule est parti une fois l'heure du rendez-vous passée`,
+           (await premiereLigne.locator('.ligne-meta').last().textContent())?.includes('Parti le'))
 
       const boutonRetour = page.locator('button:has-text("Marquer le retour du véhicule")')
-      note(`${prefixe} — bouton de retour disponible une fois planifié`,
+      note(`${prefixe} — bouton de retour disponible une fois le véhicule parti`,
            (await boutonRetour.count()) === 1)
       await boutonRetour.click()
       await page.waitForTimeout(900)
       note(`${prefixe} — retour du véhicule enregistré`,
            appels.some((a) => a.fonction === 'inspection_ligne' && a.p.garantie_retour_le))
+      note(`${prefixe} — le retour complète la réparation`,
+           (await premiereLigne.locator('.fait').first().textContent())?.includes('Fait'))
 
       await premiereCaseGarantie.click()
       await page.waitForTimeout(900)

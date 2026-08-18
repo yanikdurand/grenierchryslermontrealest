@@ -70,7 +70,8 @@ export function Inspection() {
       const { data: l } = await supabase
         .from('inspection_ligne')
         .select(`id, no_ligne, description, code_reparation_id, cout, complete, complete_le,
-                 decision, decide_le, sous_garantie, garantie_lieu, garantie_rdv, garantie_retour_le`)
+                 decision, decide_le, sous_garantie, garantie_lieu, garantie_rdv,
+                 garantie_parti_le, garantie_retour_le`)
         .eq('inspection_id', inspection.inspection_id)
         .order('no_ligne')
       const listeLignes = (l ?? []) as LigneInspection[]
@@ -165,7 +166,11 @@ export function Inspection() {
     setAction(null)
   }
 
-  /** Planifier le rendez-vous déplace le véhicule en mécanique externe (trigger). */
+  /**
+   * Planifier ne déplace rien tout de suite : à l'heure du rendez-vous, une
+   * tâche planifiée constate que l'heure est arrivée et fait vraiment partir
+   * le véhicule (`garantie_parti_le`, posé côté serveur — jamais ici).
+   */
   async function planifierGarantie(ligne: LigneInspection, e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const d = new FormData(e.currentTarget)
@@ -176,16 +181,17 @@ export function Inspection() {
       garantie_rdv: rdv ? new Date(rdv).toISOString() : null,
     }).eq('id', ligne.id)
     if (error) setErreur(messageErreur(error))
-    else { await charger(); setSucces('Rendez-vous planifié. Le véhicule est passé en mécanique externe.') }
+    else { await charger(); setSucces('Rendez-vous planifié. Le véhicule passera en mécanique externe à l’heure prévue.') }
     setAction(null)
   }
 
+  /** Le retour complète la ligne et remet le véhicule où il était (trigger). */
   async function marquerRetour(ligne: LigneInspection) {
     setAction(`retour-${ligne.id}`); setErreur(null); setSucces(null)
     const { error } = await supabase
       .from('inspection_ligne').update({ garantie_retour_le: new Date().toISOString() }).eq('id', ligne.id)
     if (error) setErreur(messageErreur(error))
-    else { await charger(); setSucces('Retour du véhicule enregistré.') }
+    else { await charger(); setSucces('Retour du véhicule enregistré. La réparation est marquée faite.') }
     setAction(null)
   }
 
@@ -381,8 +387,18 @@ export function Inspection() {
                       {l.sous_garantie && (
                         <div className="ligne-meta">
                           {l.garantie_lieu && <span>Chez {l.garantie_lieu}</span>}
-                          {l.garantie_rdv && <span>Rendez-vous le {dateCourte(l.garantie_rdv)}</span>}
-                          {l.garantie_retour_le && <span className="fait">Revenu le {dateCourte(l.garantie_retour_le)}</span>}
+                          {l.garantie_rdv && (
+                            <span>
+                              Rendez-vous le {dateCourte(l.garantie_rdv)}
+                              {!l.garantie_parti_le && ' — véhicule encore ici'}
+                            </span>
+                          )}
+                          {l.garantie_parti_le && !l.garantie_retour_le && (
+                            <span>Parti le {dateCourte(l.garantie_parti_le)}</span>
+                          )}
+                          {l.garantie_retour_le && (
+                            <span className="fait">Revenu le {dateCourte(l.garantie_retour_le)}</span>
+                          )}
                         </div>
                       )}
 
@@ -407,7 +423,7 @@ export function Inspection() {
                               {action === `planifier-${l.id}` ? 'Enregistrement…' : 'Planifier'}
                             </button>
                           </form>
-                          {l.garantie_rdv && !l.garantie_retour_le && (
+                          {l.garantie_parti_le && !l.garantie_retour_le && (
                             <button
                               type="button" className="bouton-discret" disabled={action !== null}
                               onClick={() => marquerRetour(l)}

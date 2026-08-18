@@ -95,6 +95,12 @@ export type VehiculeApp = {
   vente_type_transaction: string | null
   vente_force_dossier: string | null
   vente_date_livraison_prevue: string | null
+  /** La réparation sous garantie la plus récente — active en priorité, sinon la dernière connue. */
+  garantie_description: string | null
+  garantie_lieu: string | null
+  garantie_rdv: string | null
+  garantie_parti_le: string | null
+  garantie_retour_le: string | null
 }
 
 export type Pneu = {
@@ -214,6 +220,7 @@ export type LigneInspection = {
   sous_garantie: boolean
   garantie_lieu: string | null
   garantie_rdv: string | null
+  garantie_parti_le: string | null
   garantie_retour_le: string | null
 }
 
