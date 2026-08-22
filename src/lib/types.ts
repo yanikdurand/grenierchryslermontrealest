@@ -101,6 +101,8 @@ export type VehiculeApp = {
   garantie_rdv: string | null
   garantie_parti_le: string | null
   garantie_retour_le: string | null
+  /** Un neuf n'a ni Carfax ni SAAQ ni feuille d'équipements d'occasion. */
+  type_vehicule: 'occasion' | 'neuf'
 }
 
 export type Pneu = {

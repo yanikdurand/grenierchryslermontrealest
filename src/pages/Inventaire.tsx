@@ -20,6 +20,10 @@ type File = {
 import type { Statut, VehiculeApp } from '../lib/types'
 
 const ATTENTE_RECEPTION = 'ATTENTE DE RÉCEPTION'
+const A_VENIR = 'À VENIR'
+
+/** §1.1 du brief : ces statuts sont exclus de toute mesure d'inventaire — le véhicule est parti. */
+const STATUTS_EXCLUS_DES_MESURES = ['LIVRÉ', 'WHOLESALE', 'RETOUR']
 
 type EtatCreation = {
   creation?: { noStock: string; documentsEnEchec: string[] }
@@ -50,13 +54,17 @@ export function Inventaire() {
   const critiquesSeulement = params.get('critiques') === '1'
   const saaqSeulement = params.get('saaq') === '1'
   const venduSeulement = params.get('vendu') === '1'
+  const typeChoisi = params.get('type') as 'occasion' | 'neuf' | '' | null ?? ''
 
-  const filtrer = useCallback((suivant: { statut?: string; critiques?: boolean; saaq?: boolean; vendu?: boolean }) => {
+  const filtrer = useCallback((suivant: {
+    statut?: string; critiques?: boolean; saaq?: boolean; vendu?: boolean; type?: 'occasion' | 'neuf'
+  }) => {
     const p = new URLSearchParams()
     if (suivant.statut) p.set('statut', suivant.statut)
     if (suivant.critiques) p.set('critiques', '1')
     if (suivant.saaq) p.set('saaq', '1')
     if (suivant.vendu) p.set('vendu', '1')
+    if (suivant.type) p.set('type', suivant.type)
     setParams(p, { replace: true })
   }, [setParams])
 
@@ -109,6 +117,7 @@ export function Inventaire() {
       if (critiquesSeulement && v.nb_critiques === 0) return false
       if (saaqSeulement && !(v.requiert_inspection_saaq && !v.saaq_complete_le)) return false
       if (venduSeulement && !v.vente_etat) return false
+      if (typeChoisi && v.type_vehicule !== typeChoisi) return false
       if (!terme) return true
       return (
         v.no_stock?.toUpperCase().includes(terme) ||
@@ -116,7 +125,7 @@ export function Inventaire() {
         v.vehicule_titre?.toUpperCase().includes(terme)
       )
     })
-  }, [vehicules, recherche, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement])
+  }, [vehicules, recherche, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement, typeChoisi])
 
   /**
    * Files nommées plutôt que filtres à reconstruire, sur le modèle des pages
@@ -126,7 +135,7 @@ export function Inventaire() {
     const parStatut = (nom: string) => vehicules.filter((v) => v.statut === nom).length
     const base: File[] = [
       { cle: 'tous', libelle: 'Tous', compte: vehicules.length,
-        actif: !statutChoisi && !critiquesSeulement && !saaqSeulement && !venduSeulement,
+        actif: !statutChoisi && !critiquesSeulement && !saaqSeulement && !venduSeulement && !typeChoisi,
         aller: () => filtrer({}) },
       // Une réparation critique bloque la vente : c'est le seul rouge de l'écran.
       { cle: 'critiques', libelle: 'Alertes critiques',
@@ -142,9 +151,13 @@ export function Inventaire() {
       // file se lit sur `vente_etat`, jamais sur `statut`.
       { cle: 'vendu', libelle: 'Vendu', compte: vehicules.filter((v) => v.vente_etat).length,
         ton: 'vente', actif: venduSeulement, aller: () => filtrer({ vendu: true }) },
+      // Neuf : commandé sur DealerConnect, pas encore reçu ou en préparation.
+      { cle: 'neuf', libelle: 'Neuf',
+        compte: vehicules.filter((v) => v.type_vehicule === 'neuf').length,
+        actif: typeChoisi === 'neuf', aller: () => filtrer({ type: 'neuf' }) },
     ]
     // Les statuts opérationnels que l'équipe suit au quotidien dans Airtable.
-    const suivis = [ATTENTE_RECEPTION, 'VÉHICULE REÇU', 'DISPONIBLE', 'WHOLESALE', 'DÉMO', 'COURTOISIE']
+    const suivis = [A_VENIR, ATTENTE_RECEPTION, 'VÉHICULE REÇU', 'DISPONIBLE', 'WHOLESALE', 'DÉMO', 'COURTOISIE']
     for (const nom of suivis) {
       const compte = parStatut(nom)
       if (compte === 0 && statutChoisi !== nom) continue
@@ -158,21 +171,29 @@ export function Inventaire() {
       })
     }
     return base
-  }, [vehicules, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement, filtrer])
+  }, [vehicules, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement, typeChoisi, filtrer])
 
-  /** Moyennes suivies sur le tableau de bord Airtable. */
+  /**
+   * Moyennes suivies sur le tableau de bord Airtable.
+   * §1.1 du brief : un véhicule LIVRÉ, WHOLESALE ou RETOUR n'est plus en
+   * inventaire — il fausserait « jours en moyenne » et le reste à la baisse.
+   */
+  const enInventaire = useMemo(
+    () => vehicules.filter((v) => !STATUTS_EXCLUS_DES_MESURES.includes(v.statut ?? '')),
+    [vehicules]
+  )
   const moyennes = useMemo(() => {
     const moy = (vals: (number | null)[]) => {
       const n = vals.filter((v): v is number => v !== null && v !== undefined)
       return n.length ? Math.round(n.reduce((a, b) => a + b, 0) / n.length) : null
     }
     return {
-      jours: moy(vehicules.map((v) => v.jours_inventaire)),
-      prix: moy(vehicules.map((v) => v.prix_vente)),
-      km: moy(vehicules.map((v) => v.km)),
-      profit: moy(vehicules.map((v) => v.profit)),
+      jours: moy(enInventaire.map((v) => v.jours_inventaire)),
+      prix: moy(enInventaire.map((v) => v.prix_vente)),
+      km: moy(enInventaire.map((v) => v.km)),
+      profit: moy(enInventaire.map((v) => v.profit)),
     }
-  }, [vehicules])
+  }, [enInventaire])
 
   const peutRecevoir = aLeDroit('vehicule.recevoir')
 
@@ -258,6 +279,7 @@ export function Inventaire() {
                     {v.no_stock}
                   </Link>
                   <span className="badges-statut">
+                    {v.type_vehicule === 'neuf' && <span className="statut statut-attente">Neuf</span>}
                     <span className={classeStatut(v.statut)}>{v.statut}</span>
                     {v.disponible_depuis && v.statut !== 'DISPONIBLE' && !v.vente_etat && (
                       <span className="statut statut-disponible">Disponible</span>
@@ -314,7 +336,7 @@ export function Inventaire() {
                     Ouvrir la fiche
                   </Link>
 
-                  {v.statut === ATTENTE_RECEPTION && peutRecevoir && (
+                  {(v.statut === ATTENTE_RECEPTION || v.statut === A_VENIR) && peutRecevoir && (
                     <button
                       type="button"
                       className="bouton-secondaire"

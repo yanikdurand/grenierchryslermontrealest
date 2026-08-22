@@ -15,6 +15,8 @@ const CATEGORIES: { valeur: CategorieTravaux; libelle: string }[] = [
   { valeur: 'autre', libelle: 'Autre' },
 ]
 
+type ModeleTravaux = { code: string; nom: string; description: string | null }
+
 /**
  * L'envers de l'inspection : ici, c'est le concessionnaire qui écrit au
  * service, pas le service qui écrit à la direction. Une seule demande à la
@@ -27,6 +29,7 @@ export function DemandeTravaux() {
   const [vehicule, setVehicule] = useState<VehiculeApp | null>(null)
   const [demandes, setDemandes] = useState<DemandeTravauxApp[]>([])
   const [lignes, setLignes] = useState<LigneDemandeTravaux[]>([])
+  const [modeles, setModeles] = useState<ModeleTravaux[]>([])
 
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -43,11 +46,14 @@ export function DemandeTravaux() {
     if (!id) return
     setErreur(null)
 
-    const [v, d] = await Promise.all([
+    const [v, d, m] = await Promise.all([
       supabase.from('v_vehicule_app').select('*').eq('id', id).maybeSingle(),
       supabase.from('v_demande_travaux_app').select('*').eq('vehicule_id', id)
         .order('cree_le', { ascending: false }),
+      supabase.from('modele_travaux').select('code, nom, description')
+        .eq('actif', true).order('nom'),
     ])
+    setModeles((m.data ?? []) as ModeleTravaux[])
 
     if (v.error || !v.data) {
       setErreur(v.error ? messageErreur(v.error) : 'Véhicule introuvable.')
@@ -89,11 +95,16 @@ export function DemandeTravaux() {
     e.preventDefault()
     if (!id) return
     const form = e.currentTarget
-    const notes = String(new FormData(form).get('notes') ?? '').trim()
+    const donnees = new FormData(form)
+    const notes = String(donnees.get('notes') ?? '').trim()
+    const modele = String(donnees.get('modele') ?? '').trim() || null
+    // Le seul modèle qui existe aujourd'hui identifie la réception d'un neuf ;
+    // les futurs modèles porteront leur propre origine le moment venu.
+    const origine = modele === 'reception_neuf' ? 'reception_neuf' : 'manuelle'
 
     setAction('creer'); setErreur(null); setSucces(null)
     const { error } = await supabase.rpc('creer_demande_travaux', {
-      p_vehicule: id, p_notes: notes || null,
+      p_vehicule: id, p_notes: notes || null, p_origine: origine, p_modele: modele,
     })
     if (error) setErreur(messageErreur(error))
     else { form.reset(); setFormulaireOuvert(false); await charger() }
@@ -200,6 +211,17 @@ export function DemandeTravaux() {
               </div>
             ) : (
               <form onSubmit={creerDemande} className="espace-haut">
+                {modeles.length > 0 && (
+                  <label className="champ">
+                    <span>Modèle de travaux</span>
+                    <select name="modele" defaultValue={v.type_vehicule === 'neuf' ? 'reception_neuf' : ''}>
+                      <option value="">Liste vide — je choisis les tâches</option>
+                      {modeles.map((m) => (
+                        <option key={m.code} value={m.code}>{m.nom}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <label className="champ">
                   <span>Contexte — ce qui motive la demande</span>
                   <textarea name="notes" rows={2} placeholder="Véhicule vendu, préparation pour la livraison…" />

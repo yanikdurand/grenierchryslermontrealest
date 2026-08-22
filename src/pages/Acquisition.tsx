@@ -42,6 +42,12 @@ export function Acquisition() {
 
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
 
+  // Neuf ou occasion : détermine le statut de départ (À VENIR / ATTENTE DE
+  // RÉCEPTION) et ce qui est exigé. Un neuf n'a ni Carfax, ni fournisseur
+  // d'encan, ni inspection SAAQ — il est commandé au constructeur.
+  const [typeVehicule, setTypeVehicule] = useState<'occasion' | 'neuf'>('occasion')
+  const estNeuf = typeVehicule === 'neuf'
+
   // Obligatoires
   const [noStock, setNoStock] = useState('')
   const [vin, setVin] = useState('')
@@ -223,27 +229,33 @@ export function Acquisition() {
 
   const estEchange = fournisseur === ECHANGE_CLIENT
   const typeJustificatif: TypeDocument = estEchange ? 'evaluation_echange' : 'facture_fournisseur'
-  const libelleJustificatif = estEchange
-    ? "Feuille d'évaluation"
-    : 'Facture du fournisseur'
+  const libelleJustificatif = estNeuf
+    ? 'Facture du constructeur'
+    : estEchange ? "Feuille d'évaluation" : 'Facture du fournisseur'
 
   /**
    * Le champ SAAQ n'apparaît qu'une fois l'immatriculation jointe, et devient
-   * alors obligatoire (brief §3, étape 1).
+   * alors obligatoire (brief §3, étape 1). Un véhicule neuf ne passe jamais
+   * à la SAAQ — la section entière ne s'affiche pas pour lui.
    */
-  const saaqRequisPourFormulaire = immatriculation !== null
+  const saaqRequisPourFormulaire = !estNeuf && immatriculation !== null
 
   const pretAEnvoyer = useMemo(() => {
     if (!noStock.trim() || !marqueEffective || !modeleEffectif) return false
     if (vinInvalide(vin)) return false
-    if (!annee || !prixAchat || !lienCarfax.trim()) return false
-    if (!fournisseur) return false
-    if (fournisseur === FOURNISSEUR_AUTRE && !fournisseurAutre.trim()) return false
+    if (!annee) return false
     if (!justificatif) return false
+    // Prix d'achat, Carfax et fournisseur n'existent pas pour un véhicule
+    // commandé au constructeur — seule l'occasion les exige.
+    if (!estNeuf) {
+      if (!prixAchat || !lienCarfax.trim()) return false
+      if (!fournisseur) return false
+      if (fournisseur === FOURNISSEUR_AUTRE && !fournisseurAutre.trim()) return false
+    }
     if (saaqRequisPourFormulaire && requiertSaaq === '') return false
     return true
   }, [
-    noStock, marqueEffective, modeleEffectif, vin, annee, prixAchat, lienCarfax,
+    noStock, marqueEffective, modeleEffectif, vin, annee, estNeuf, prixAchat, lienCarfax,
     fournisseur, fournisseurAutre, justificatif, saaqRequisPourFormulaire, requiertSaaq,
   ])
 
@@ -311,16 +323,18 @@ export function Acquisition() {
     setEnvoi(true)
 
     // 1. Création du véhicule — c'est `creer_vehicule` qui applique les règles.
+    //    Prix d'achat, Carfax et fournisseur restent nuls pour un neuf : la
+    //    fonction ne les exige pas pour ce type, inutile de les faire semblant.
     const { data: vehiculeId, error } = await supabase.rpc('creer_vehicule', {
       p_no_stock: noStock.trim(),
       p_vin: vin.trim().toUpperCase(),
       p_marque: marqueEffective,
       p_modele: modeleEffectif,
       p_annee: Number(annee),
-      p_prix_achat: Number(prixAchat),
-      p_lien_carfax: lienCarfax.trim(),
-      p_fournisseur: fournisseur || null,
-      p_fournisseur_autre: fournisseur === FOURNISSEUR_AUTRE ? fournisseurAutre.trim() : null,
+      p_prix_achat: estNeuf ? (prixAchat ? Number(prixAchat) : null) : Number(prixAchat),
+      p_lien_carfax: estNeuf ? null : lienCarfax.trim(),
+      p_fournisseur: estNeuf ? null : fournisseur || null,
+      p_fournisseur_autre: !estNeuf && fournisseur === FOURNISSEUR_AUTRE ? fournisseurAutre.trim() : null,
       p_lien_existant: lienExistant,
       p_lien_existant_note: lienExistant ? lienExistantNote.trim() || null : null,
       p_requiert_saaq: saaqRequisPourFormulaire ? requiertSaaq === 'oui' : false,
@@ -332,6 +346,7 @@ export function Acquisition() {
       p_rappels: rappels.trim() || null,
       p_date_mise_en_service: dateMiseEnService || null,
       p_notes: notes.trim() || null,
+      p_type_vehicule: typeVehicule,
     })
 
     if (error || !vehiculeId) {
@@ -361,11 +376,47 @@ export function Acquisition() {
     <div className="page">
       <h1 className="titre-page">Nouvelle acquisition</h1>
       <p className="intro-page">
-        Le véhicule sera créé au statut <strong>ATTENTE DE RÉCEPTION</strong>, puis apparaîtra
-        dans la liste pour être marqué reçu à son arrivée.
+        {estNeuf ? (
+          <>Le véhicule sera créé au statut <strong>À VENIR</strong> — il arrive dans 2 à 3 mois.
+            Une fois reçu, sa préparation (PDI, lavage, photos) s’envoie au service en un clic.</>
+        ) : (
+          <>Le véhicule sera créé au statut <strong>ATTENTE DE RÉCEPTION</strong>, puis apparaîtra
+            dans la liste pour être marqué reçu à son arrivée.</>
+        )}
       </p>
 
       <form onSubmit={soumettre} className="formulaire">
+        <section className="bloc">
+          <h2>Type de véhicule</h2>
+          <fieldset className="choix-obligatoire">
+            <legend>Neuf ou occasion ? <em>obligatoire</em></legend>
+            <label className="radio">
+              <input
+                type="radio"
+                name="type_vehicule"
+                checked={typeVehicule === 'occasion'}
+                onChange={() => setTypeVehicule('occasion')}
+              />
+              <span>Occasion</span>
+            </label>
+            <label className="radio">
+              <input
+                type="radio"
+                name="type_vehicule"
+                checked={typeVehicule === 'neuf'}
+                onChange={() => setTypeVehicule('neuf')}
+              />
+              <span>Neuf</span>
+            </label>
+          </fieldset>
+          {estNeuf && (
+            <p className="note">
+              Commandé sur DealerConnect. Prix d’achat, Carfax, fournisseur et inspection SAAQ ne
+              s’appliquent pas — complétez le prix depuis la facture quand vous l’aurez.
+            </p>
+          )}
+        </section>
+
         <section className="bloc">
           <h2>Identification</h2>
           <div className="grille">
@@ -507,57 +558,66 @@ export function Acquisition() {
         </section>
 
         <section className="bloc">
-          <h2>Provenance</h2>
+          <h2>{estNeuf ? 'Facture' : 'Provenance'}</h2>
           <div className="grille">
             <label className="champ">
-              <span>Prix d’achat <em>obligatoire</em></span>
+              <span>Prix d’achat {estNeuf ? <em>optionnel</em> : <em>obligatoire</em>}</span>
               <input
                 type="number"
                 value={prixAchat}
                 onChange={(e) => setPrixAchat(e.target.value)}
                 min={0}
                 step="0.01"
-                required
+                required={!estNeuf}
               />
+              {estNeuf && (
+                <small className="note">À remplir depuis la facture DealerConnect, quand elle est en main.</small>
+              )}
             </label>
 
-            <label className="champ">
-              <span>Lien Carfax <em>obligatoire</em></span>
-              <input
-                type="url"
-                value={lienCarfax}
-                onChange={(e) => setLienCarfax(e.target.value)}
-                placeholder="https://…"
-                required
-              />
-            </label>
+            {!estNeuf && (
+              <>
+                <label className="champ">
+                  <span>Lien Carfax <em>obligatoire</em></span>
+                  <input
+                    type="url"
+                    value={lienCarfax}
+                    onChange={(e) => setLienCarfax(e.target.value)}
+                    placeholder="https://…"
+                    required
+                  />
+                </label>
 
-            <label className="champ">
-              <span>Fournisseur <em>obligatoire</em></span>
-              <select value={fournisseur} onChange={(e) => setFournisseur(e.target.value)} required>
-                <option value="">Choisir…</option>
-                {fournisseurs.map((f) => (
-                  <option key={f.id} value={f.nom}>{f.nom}</option>
-                ))}
-              </select>
-            </label>
+                <label className="champ">
+                  <span>Fournisseur <em>obligatoire</em></span>
+                  <select value={fournisseur} onChange={(e) => setFournisseur(e.target.value)} required>
+                    <option value="">Choisir…</option>
+                    {fournisseurs.map((f) => (
+                      <option key={f.id} value={f.nom}>{f.nom}</option>
+                    ))}
+                  </select>
+                </label>
 
-            {fournisseur === FOURNISSEUR_AUTRE && (
-              <label className="champ">
-                <span>Préciser le fournisseur <em>obligatoire</em></span>
-                <input
-                  value={fournisseurAutre}
-                  onChange={(e) => setFournisseurAutre(e.target.value)}
-                  required
-                />
-              </label>
+                {fournisseur === FOURNISSEUR_AUTRE && (
+                  <label className="champ">
+                    <span>Préciser le fournisseur <em>obligatoire</em></span>
+                    <input
+                      value={fournisseurAutre}
+                      onChange={(e) => setFournisseurAutre(e.target.value)}
+                      required
+                    />
+                  </label>
+                )}
+              </>
             )}
           </div>
 
           <label className="champ champ-fichier">
             <span>
               {libelleJustificatif} <em>obligatoire</em>
-              <Info texte={estEchange
+              <Info texte={estNeuf
+                ? 'Joindre la facture reçue de DealerConnect.'
+                : estEchange
                 ? "Le véhicule vient d'une reprise : joindre la feuille d'évaluation."
                 : 'Joindre la facture reçue du fournisseur.'} />
             </span>
@@ -570,6 +630,7 @@ export function Acquisition() {
           </label>
         </section>
 
+        {!estNeuf && (
         <section className="bloc">
           <h2>Immatriculation et SAAQ</h2>
 
@@ -618,7 +679,9 @@ export function Acquisition() {
             </fieldset>
           )}
         </section>
+        )}
 
+        {!estNeuf && (
         <section className="bloc">
           <h2>Lien existant</h2>
           <label className="case">
@@ -646,6 +709,7 @@ export function Acquisition() {
             </>
           )}
         </section>
+        )}
 
         <section className="bloc">
           <h2>Garanties et notes <span className="facultatif">facultatif</span></h2>
