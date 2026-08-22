@@ -49,6 +49,7 @@ type SansLead = {
   prix_vente: number | null
   jours_inventaire: number | null
   photos: number | null
+  vehicule_id: string
 }
 
 /**
@@ -276,7 +277,11 @@ export function TableauxDeBord() {
               <tbody>
                 {sansLead.slice(0, 25).map((s) => (
                   <tr key={s.no_stock}>
-                    <td><strong>{s.no_stock}</strong></td>
+                    <td>
+                      <Link to={`/vehicule/${s.vehicule_id}`} className="lien-stock">
+                        <strong>{s.no_stock}</strong>
+                      </Link>
+                    </td>
                     <td className="discret">{texte(s.vehicule)}</td>
                     <td>{argent(s.prix_vente)}</td>
                     <td className={(s.jours_inventaire ?? 0) > 90 ? 'jours-alerte' : ''}>

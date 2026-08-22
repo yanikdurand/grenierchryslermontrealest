@@ -388,14 +388,16 @@ async function scenario(navigateur, cle) {
     }
     if (chemin === '/rest/v1/v_stock_sans_lead') {
       return route.fulfill(json([{ no_stock: 'C9', vehicule: '2019 JEEP CHEROKEE',
-        prix_vente: 22995, jours_inventaire: 120, photos: 4 }]))
+        prix_vente: 22995, jours_inventaire: 120, photos: 4, vehicule_id: 'veh-1' }]))
     }
     if (chemin === '/rest/v1/v_goulots') {
       return route.fulfill(json([
         { no_stock: 'A1234', vehicule: '2021 HONDA ACCORD', statut: 'VÉHICULE REÇU',
-          etape_bloquante: "En attente de feuille d'équipements", jours_a_cette_etape: 12 },
+          etape_bloquante: "En attente de feuille d'équipements", jours_a_cette_etape: 12,
+          vehicule_id: 'veh-1' },
         { no_stock: 'B5678', vehicule: '2020 RAM 1500', statut: 'DISPONIBLE',
-          etape_bloquante: "En attente de feuille d'équipements", jours_a_cette_etape: 300 },
+          etape_bloquante: "En attente de feuille d'équipements", jours_a_cette_etape: 300,
+          vehicule_id: 'veh-1' },
       ]))
     }
     if (chemin === '/rest/v1/v_delai_mise_en_marche') {
@@ -1146,6 +1148,8 @@ async function scenario(navigateur, cle) {
     note(`${prefixe} — leads par source en barres`,
          (await page.locator('.barres > li').count()) === 2)
     note(`${prefixe} — stock sans lead signalé`, texteBord.includes('sans lead depuis 30 jours'))
+    note(`${prefixe} — le stock sans lead ouvre sa fiche (§3.2)`,
+         (await page.locator('a.lien-stock[href="/vehicule/veh-1"]').count()) > 0)
 
     await page.screenshot({ path: `apercu-tableaux-${cle}.png`, fullPage: true })
   }
@@ -1173,6 +1177,8 @@ async function scenario(navigateur, cle) {
          (await page.locator('.tableau tbody tr').count()) === 2)
     note(`${prefixe} — le blocage ancien est signalé en rouge`,
          (await page.locator('.jours-alerte').count()) === 2)
+    note(`${prefixe} — un véhicule bloqué ouvre sa fiche (§3.2)`,
+         (await page.locator('a.lien-stock[href="/vehicule/veh-1"]').count()) > 0)
 
     await page.screenshot({ path: `apercu-parcours-${cle}.png`, fullPage: true })
   }

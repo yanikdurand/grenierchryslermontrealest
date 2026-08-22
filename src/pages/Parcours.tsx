@@ -10,6 +10,7 @@ type Goulot = {
   statut: string | null
   etape_bloquante: string | null
   jours_a_cette_etape: number | null
+  vehicule_id: string
 }
 
 type Delai = {
@@ -166,7 +167,11 @@ export function Parcours() {
                 <tbody>
                   {liste.map((g) => (
                     <tr key={g.no_stock}>
-                      <td><strong>{g.no_stock}</strong></td>
+                      <td>
+                        <Link to={`/vehicule/${g.vehicule_id}`} className="lien-stock">
+                          <strong>{g.no_stock}</strong>
+                        </Link>
+                      </td>
                       <td className="discret">{texte(g.vehicule)}</td>
                       <td>{texte(g.statut)}</td>
                       <td className={(g.jours_a_cette_etape ?? 0) >= SEUIL_ALERTE ? 'jours-alerte' : ''}>
