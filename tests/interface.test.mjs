@@ -392,6 +392,14 @@ async function scenario(navigateur, cle) {
           gravite: 'critique', jours_ouverte: 5, vehicule_id: 'veh-1' },
       ]))
     }
+    if (chemin === '/rest/v1/v_diagnostic_prix_leads') {
+      return route.fulfill(json([
+        { vehicule_id: 'veh-1', no_stock: 'A1234', vehicule: '2021 HONDA ACCORD', prix_vente: 24995,
+          jours_inventaire: 122, leads_total: 0, affiche_en_ligne: true, diagnostic: 'prix_ou_visibilite' },
+        { vehicule_id: 'veh-2', no_stock: 'A5678', vehicule: '2022 TOYOTA COROLLA', prix_vente: 21995,
+          jours_inventaire: 95, leads_total: 18, affiche_en_ligne: true, diagnostic: 'traitement' },
+      ]))
+    }
     if (chemin === '/rest/v1/v_kpi_stock_app') {
       return route.fulfill(json({ vehicules_en_stock: 110, vieillissants: 18,
         age_moyen: 64, age_median: 52, non_affiches: 9, sans_vin: 3,
@@ -1277,6 +1285,28 @@ async function scenario(navigateur, cle) {
          (await page.locator('a:has-text("Voir tous les dossiers")').count()) === 1)
 
     await page.screenshot({ path: `apercu-sante-${cle}.png`, fullPage: true })
+  }
+
+  // --- Diagnostic prix et leads (brief §8, amélioration validée #1) ---
+  const voitDiagnostic = profil.droits.includes('lead.voir')
+  note(`${prefixe} — onglet Diagnostic prix et leads ${voitDiagnostic ? 'visible' : 'masqué'}`,
+       ((await page.locator('nav a:has-text("Diagnostic prix et leads")').count()) === 1) === voitDiagnostic)
+
+  if (voitDiagnostic) {
+    await page.click('nav a:has-text("Diagnostic prix et leads")')
+    await page.waitForSelector('.bloc', { timeout: 15000 })
+    const texteDiagnostic = await page.locator('.page').textContent()
+
+    note(`${prefixe} — problème de prix ou de visibilité affiché`,
+         texteDiagnostic.includes('Problème de prix ou de visibilité'))
+    note(`${prefixe} — problème de traitement affiché`,
+         texteDiagnostic.includes('Problème de traitement ou de présentation'))
+    note(`${prefixe} — les deux catégories sont bien séparées`,
+         (await page.locator('.bloc .tableau tbody tr').count()) === 2)
+    note(`${prefixe} — un véhicule diagnostiqué ouvre sa fiche (§3.2)`,
+         (await page.locator('a.lien-stock[href="/vehicule/veh-1"]').count()) > 0)
+
+    await page.screenshot({ path: `apercu-diagnostic-${cle}.png`, fullPage: true })
   }
 
   // --- Parcours : où les véhicules bloquent ---

@@ -58,6 +58,7 @@ const GROUPES: Groupe[] = [
     entrees: [
       { vers: '/tableaux', libelle: 'Tableaux de bord', icone: 'graphique', droits: ['rapport.voir'] },
       { vers: '/sante', libelle: 'Santé de la journée', icone: 'graphique', droits: ['rapport.voir'] },
+      { vers: '/diagnostic', libelle: 'Diagnostic prix et leads', icone: 'graphique', droits: ['lead.voir'] },
       { vers: '/parcours', libelle: 'Parcours', icone: 'chemin', droits: ['rapport.voir'] },
     ],
   },
