@@ -163,6 +163,10 @@ async function scenario(navigateur, cle) {
       cout: 450, complete: false, complete_le: null, decision: 'en_attente', decide_le: null,
       sous_garantie: false, garantie_lieu: null, garantie_rdv: null, garantie_parti_le: null,
       garantie_retour_le: null, garantie_statut_avant: null },
+    { id: 'l3', no_ligne: 3, description: 'Freins à refaire', code_reparation_id: 2,
+      cout: 600, complete: false, complete_le: null, decision: 'signature', decide_le: null,
+      sous_garantie: false, garantie_lieu: null, garantie_rdv: null, garantie_parti_le: null,
+      garantie_retour_le: null, garantie_statut_avant: null },
   ]
   let technicien = null
   // L'aviseur teste la complétion d'une demande déjà envoyée par quelqu'un
@@ -360,10 +364,15 @@ async function scenario(navigateur, cle) {
     }
     if (chemin === '/rest/v1/document') {
       if (methode === 'POST') return route.fulfill(json({}, 201))
-      return route.fulfill(json([{
-        id: 'd1', type: 'facture_fournisseur', chemin_storage: 'veh-1/facture.pdf',
-        nom_fichier: 'facture.pdf', ajoute_le: '2026-08-01T12:00:00Z', taille_octets: 24000,
-      }]))
+      const documents = [
+        { id: 'd1', type: 'facture_fournisseur', chemin_storage: 'veh-1/facture.pdf',
+          nom_fichier: 'facture.pdf', ajoute_le: '2026-08-01T12:00:00Z', taille_octets: 24000 },
+        { id: 'd2', type: 'dommage', chemin_storage: 'veh-1/dommage-pare-choc.jpg',
+          nom_fichier: 'dommage-pare-choc.jpg', ajoute_le: '2026-08-02T12:00:00Z', taille_octets: 51000 },
+      ]
+      const typeDemande = new AdresseURL(req.url()).searchParams.get('type')
+      const filtres = typeDemande ? documents.filter((d) => `eq.${d.type}` === typeDemande) : documents
+      return route.fulfill(json(filtres))
     }
     if (chemin === '/rest/v1/prix_historique') {
       return route.fulfill(json([{ id: 'h1', prix: 24995, change_le: '2026-08-05T10:00:00Z' }]))
@@ -516,7 +525,17 @@ async function scenario(navigateur, cle) {
         }
         return l
       })
-      return route.fulfill(json(lignes))
+      // Desking filtre par decision/complete — répliqué ici pour rester
+      // fidèle à la vraie requête plutôt que de renvoyer tout sans distinction.
+      const paramsLignes = new AdresseURL(req.url()).searchParams
+      let resultat = lignes
+      if (paramsLignes.get('decision') === 'eq.signature') {
+        resultat = resultat.filter((l) => l.decision === 'signature')
+      }
+      if (paramsLignes.get('complete') === 'eq.false') {
+        resultat = resultat.filter((l) => !l.complete)
+      }
+      return route.fulfill(json(resultat))
     }
     if (chemin === '/rest/v1/inspection') {
       if (methode === 'PATCH') {
@@ -616,6 +635,19 @@ async function scenario(navigateur, cle) {
       const fonction = chemin.replace('/rest/v1/rpc/', '')
       const p = JSON.parse(req.postData() || '{}')
       appels.push({ fonction, p })
+      if (fonction === 'fn_calcul_signature') {
+        // Réplique la formule du brief §5.5 : base × (1 + marge), ramené
+        // entre plancher et plafond — mêmes valeurs que celles seedées en base.
+        const exclues = new Set(p.p_lignes_exclues ?? [])
+        const base = lignes.filter((l) => l.decision === 'signature' && !l.complete && !exclues.has(l.id))
+          .reduce((t, l) => t + (l.cout ?? 0), 0)
+        const marge = 0.35
+        const plancher = 1500
+        const plafond = 4500
+        const brut = Math.round(base * (1 + marge))
+        const prix = Math.min(Math.max(brut, plancher), plafond)
+        return route.fulfill(json([{ base, marge, brut, plancher, plafond, prix }]))
+      }
       if (fonction === 'changer_statut') vehicule = { ...vehicule, statut: p.p_statut }
       if (fonction === 'completer_saaq') {
         vehicule = { ...vehicule, saaq_complete_le: new Date().toISOString(), alertes: 'Lien existant', nb_critiques: 1 }
@@ -896,7 +928,7 @@ async function scenario(navigateur, cle) {
     await page.locator('a:has-text("Ouvrir l’inspection")').first().click()
     await page.waitForSelector('.lignes-inspection', { timeout: 15000 })
     note(`${prefixe} — inspection ouverte, lignes affichées`,
-         (await page.locator('.ligne-inspection').count()) === 2)
+         (await page.locator('.ligne-inspection').count()) === 3)
     note(`${prefixe} — code de réparation affiché`,
          (await page.locator('.pastille.rouge').count()) === 1)
 
@@ -1144,6 +1176,57 @@ async function scenario(navigateur, cle) {
     }
 
     await page.screenshot({ path: `apercu-travaux-${cle}.png`, fullPage: true })
+  }
+
+  // --- Desking : Signature dynamique (PHASE 2) ---
+  const voitDesking = profil.droits.includes('vente.enregistrer') || profil.droits.includes('vehicule.voir_couts')
+  await page.click('nav a:has-text("Véhicules")')
+  await page.waitForSelector('.liste-vehicules', { timeout: 15000 })
+  await page.locator('.vehicule-actions a:has-text("Ouvrir la fiche")').first().click()
+  await page.waitForSelector('.fiche-entete', { timeout: 15000 })
+
+  const blocDesking = await page.locator('.bloc:has-text("Desking")').count()
+  note(`${prefixe} — bloc « Desking » ${voitDesking ? 'présent' : 'masqué'} sur la fiche`,
+       (blocDesking > 0) === voitDesking)
+
+  if (voitDesking) {
+    await page.click('a:has-text("Ouvrir le desking")')
+    await page.waitForSelector('.desking-colonnes', { timeout: 15000 })
+
+    const chiffres = async (loc) => ((await loc.textContent()) ?? '').replace(/\D/g, '')
+    // Le prix « tel quel » suit vehicule.prix_vente, modifié plus tôt dans le
+    // scénario pour qui a vehicule.modifier — lu en direct plutôt que figé.
+    const prixCourant = vehicule.prix_vente
+
+    note(`${prefixe} — prix tel quel affiché`,
+         (await chiffres(page.locator('.desking-colonne').first().locator('.desking-prix'))) === String(prixCourant))
+
+    note(`${prefixe} — travail Signature listé`,
+         (await page.locator('.desking-signature .ligne-inspection').count()) === 1)
+
+    await page.waitForTimeout(500)
+    // 600 $ × 1,35 = 810 $, ramené au plancher 1500 $ -> prix tel quel + 1500 $
+    note(`${prefixe} — prix Signature calculé et ramené au plancher configuré`,
+         (await chiffres(page.locator('.desking-signature .desking-prix'))) === String(prixCourant + 1500))
+
+    // Décocher le seul travail : le fil recalcule via fn_calcul_signature.
+    await page.locator('.desking-signature input[type=checkbox]').uncheck()
+    await page.waitForTimeout(500)
+    note(`${prefixe} — décocher un travail relance le calcul (à la carte)`,
+         appels.some((a) => a.fonction === 'fn_calcul_signature'
+           && (a.p.p_lignes_exclues ?? []).includes('l3')))
+    await page.locator('.desking-signature input[type=checkbox]').check()
+    await page.waitForTimeout(500)
+
+    await page.click('button:has-text("Confirmer et générer le bon de préparation")')
+    await page.waitForTimeout(900)
+    note(`${prefixe} — bon de préparation créé, rempli et envoyé au service`,
+         appels.some((a) => a.fonction === 'creer_demande_travaux' && a.p.p_origine === 'manuelle')
+         && appels.some((a) => a.fonction === 'demande_travaux_ligne' && a.methode === 'POST'
+                            && a.p.description === 'Freins à refaire')
+         && appels.some((a) => a.fonction === 'envoyer_demande_travaux'))
+
+    await page.screenshot({ path: `apercu-desking-${cle}.png`, fullPage: true })
   }
 
   // --- Tableaux de bord ---

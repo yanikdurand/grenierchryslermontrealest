@@ -16,6 +16,7 @@ import { Ventes } from './pages/Ventes'
 import { Visites } from './pages/Visites'
 import { Parcours } from './pages/Parcours'
 import { TableauxDeBord } from './pages/TableauxDeBord'
+import { Desking } from './pages/Desking'
 
 /** Écran affiché quand un compte Auth n'a pas de ligne `utilisateur` liée. */
 function CompteNonLie() {
@@ -84,6 +85,7 @@ function Routage() {
         <Route path="/tableaux" element={<TableauxDeBord />} />
         <Route path="/vehicule/:id/inspection" element={<Inspection />} />
         <Route path="/vehicule/:id/travaux" element={<DemandeTravaux />} />
+        <Route path="/vehicule/:id/desking" element={<Desking />} />
         <Route path="/reglages" element={<Reglages />} />
         <Route
           path="/acquisition"

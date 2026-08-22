@@ -432,6 +432,21 @@ export function FicheVehicule() {
         </section>
       )}
 
+      {(aLeDroit('vente.enregistrer') || aLeDroit('vehicule.voir_couts')) && (
+        <section className="bloc">
+          <h2>Desking</h2>
+          <p className="note sans-marge">
+            Écran tournable vers le client — prix tel quel contre prix avec le programme
+            Signature, calculé à partir des travaux non exécutés.
+          </p>
+          <div className="vehicule-actions espace-haut">
+            <Link to={`/vehicule/${v.id}/desking`} className="bouton-secondaire">
+              Ouvrir le desking
+            </Link>
+          </div>
+        </section>
+      )}
+
       <section className="bloc">
         <h2>Pneus</h2>
         {pneus.length === 0 ? (

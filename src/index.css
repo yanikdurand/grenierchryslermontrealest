@@ -1610,3 +1610,43 @@ h1, h2, h3 {
 @media (max-width: 640px) {
   .barres > li { grid-template-columns: 6rem 1fr 2.5rem; gap: 0.5rem; }
 }
+
+/*
+ * Desking (§5.5) : deux colonnes tournables vers le client. « tel quel »
+ * reste neutre, « avec Signature » porte la teinte de marque pour guider
+ * l'œil vers ce qu'on vend — sans être criard, ce n'est pas une alerte.
+ */
+.desking-colonnes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .desking-colonnes { grid-template-columns: 1fr; }
+}
+
+.desking-colonne h3 {
+  margin-top: 1.25rem;
+}
+
+.desking-signature {
+  border-color: var(--marque);
+}
+
+.desking-prix {
+  font-size: 2rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.print-only { display: none; }
+
+@media print {
+  .lateral, .bouton-menu, .voile, .no-print { display: none !important; }
+  .contenu { margin: 0; padding: 0; }
+  .desking-colonnes { grid-template-columns: 1fr 1fr; }
+  .print-only { display: inline; }
+  .bloc { border: 1px solid #000; break-inside: avoid; }
+}
