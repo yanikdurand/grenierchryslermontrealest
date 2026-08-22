@@ -56,6 +56,7 @@ export function FicheVehicule() {
   const [action, setAction] = useState<string | null>(null)
 
   const [nouveauPrix, setNouveauPrix] = useState('')
+  const [saisieStock, setSaisieStock] = useState('')
 
   const charger = useCallback(async () => {
     if (!id) return
@@ -143,6 +144,7 @@ export function FicheVehicule() {
 
   const v = vehicule
   const peutModifier = aLeDroit('vehicule.modifier')
+  const peutRecevoir = aLeDroit('vehicule.recevoir')
   const peutSaaq = aLeDroit('saaq.completer')
   const voitCouts = v.cout_base_engage !== null
   const voitLeads = v.leads_total !== null
@@ -153,7 +155,7 @@ export function FicheVehicule() {
 
       <header className="fiche-entete">
         <div>
-          <h1 className="titre-page">{v.no_stock}</h1>
+          <h1 className="titre-page">{v.no_stock ?? 'Sans numéro'}</h1>
           <p className="fiche-titre">{v.vehicule_titre}</p>
         </div>
         <div className="badges-statut">
@@ -172,6 +174,40 @@ export function FicheVehicule() {
       )}
       {erreur && <p className="message-erreur">{erreur}</p>}
       {succes && <p className="bandeau-succes">{succes}</p>}
+
+      {!v.no_stock && peutRecevoir && (
+        <section className="bloc">
+          <h2>Numéro de stock</h2>
+          <p className="note sans-marge">
+            Ce véhicule n’a pas encore de numéro — à attribuer en faisant le contrat.
+          </p>
+          <form
+            className="formulaire-court espace-haut"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!saisieStock.trim()) return
+              executer(
+                'stock',
+                () => supabase.rpc('attribuer_no_stock', { p_vehicule: v.id, p_no_stock: saisieStock.trim() }),
+                'Numéro de stock attribué.'
+              )
+            }}
+          >
+            <label className="champ champ-inline">
+              <span>Numéro de stock</span>
+              <input
+                value={saisieStock}
+                onChange={(e) => setSaisieStock(e.target.value.toUpperCase())}
+                placeholder="A0983"
+                autoFocus
+              />
+            </label>
+            <button type="submit" className="bouton-principal" disabled={action !== null || !saisieStock.trim()}>
+              {action === 'stock' ? 'Attribution…' : 'Attribuer'}
+            </button>
+          </form>
+        </section>
+      )}
 
       {peutModifier && (
         <section className="bloc">

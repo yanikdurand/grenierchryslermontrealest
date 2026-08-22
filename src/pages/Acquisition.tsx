@@ -241,7 +241,7 @@ export function Acquisition() {
   const saaqRequisPourFormulaire = !estNeuf && immatriculation !== null
 
   const pretAEnvoyer = useMemo(() => {
-    if (!noStock.trim() || !marqueEffective || !modeleEffectif) return false
+    if (!marqueEffective || !modeleEffectif) return false
     if (vinInvalide(vin)) return false
     if (!annee) return false
     if (!justificatif) return false
@@ -325,8 +325,10 @@ export function Acquisition() {
     // 1. Création du véhicule — c'est `creer_vehicule` qui applique les règles.
     //    Prix d'achat, Carfax et fournisseur restent nuls pour un neuf : la
     //    fonction ne les exige pas pour ce type, inutile de les faire semblant.
+    //    Le numéro de stock reste optionnel : Emily l'attribue en faisant
+    //    le contrat si Jonathan ne le connaît pas déjà.
     const { data: vehiculeId, error } = await supabase.rpc('creer_vehicule', {
-      p_no_stock: noStock.trim(),
+      p_no_stock: noStock.trim() || null,
       p_vin: vin.trim().toUpperCase(),
       p_marque: marqueEffective,
       p_modele: modeleEffectif,
@@ -365,7 +367,7 @@ export function Acquisition() {
     navigate('/inventaire', {
       state: {
         creation: {
-          noStock: noStock.trim().toUpperCase(),
+          noStock: noStock.trim().toUpperCase() || null,
           documentsEnEchec: echecs,
         },
       },
@@ -421,14 +423,15 @@ export function Acquisition() {
           <h2>Identification</h2>
           <div className="grille">
             <label className="champ">
-              <span>Numéro de stock <em>obligatoire</em></span>
+              <span>Numéro de stock <em>optionnel</em></span>
               <input
                 className={noStockExistant ? 'avertissement' : undefined}
                 value={noStock}
                 onChange={(e) => setNoStock(e.target.value.toUpperCase())}
-                required
-                autoFocus
               />
+              <small className="note">
+                Laisser vide si vous ne le connaissez pas — Emily l’attribuera en faisant le contrat.
+              </small>
               {noStockExistant && (
                 <small className="indice-avertissement">
                   Déjà utilisé — <Link to={`/vehicule/${noStockExistant.id}`}>

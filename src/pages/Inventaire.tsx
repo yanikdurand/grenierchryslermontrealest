@@ -26,7 +26,7 @@ const A_VENIR = 'À VENIR'
 const STATUTS_EXCLUS_DES_MESURES = ['LIVRÉ', 'WHOLESALE', 'RETOUR']
 
 type EtatCreation = {
-  creation?: { noStock: string; documentsEnEchec: string[] }
+  creation?: { noStock: string | null; documentsEnEchec: string[] }
 }
 
 const LIBELLES_DOCUMENT: Record<string, string> = {
@@ -45,6 +45,7 @@ export function Inventaire() {
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState<string | null>(null)
   const [enCours, setEnCours] = useState<string | null>(null)
+  const [saisieStock, setSaisieStock] = useState<Record<string, string>>({})
 
   // Les filtres vivent dans l'URL : l'accueil peut donc pointer droit sur une
   // file, et un lien se partage ou se met en favori.
@@ -55,9 +56,11 @@ export function Inventaire() {
   const saaqSeulement = params.get('saaq') === '1'
   const venduSeulement = params.get('vendu') === '1'
   const typeChoisi = params.get('type') as 'occasion' | 'neuf' | '' | null ?? ''
+  const sansStockSeulement = params.get('sans-stock') === '1'
 
   const filtrer = useCallback((suivant: {
     statut?: string; critiques?: boolean; saaq?: boolean; vendu?: boolean; type?: 'occasion' | 'neuf'
+    sansStock?: boolean
   }) => {
     const p = new URLSearchParams()
     if (suivant.statut) p.set('statut', suivant.statut)
@@ -65,6 +68,7 @@ export function Inventaire() {
     if (suivant.saaq) p.set('saaq', '1')
     if (suivant.vendu) p.set('vendu', '1')
     if (suivant.type) p.set('type', suivant.type)
+    if (suivant.sansStock) p.set('sans-stock', '1')
     setParams(p, { replace: true })
   }, [setParams])
 
@@ -110,6 +114,26 @@ export function Inventaire() {
     setEnCours(null)
   }
 
+  async function attribuerStock(vehicule: VehiculeApp) {
+    const valeur = (saisieStock[vehicule.id] ?? '').trim()
+    if (!valeur) return
+    setEnCours(vehicule.id)
+    setErreur(null)
+
+    const { error } = await supabase.rpc('attribuer_no_stock', {
+      p_vehicule: vehicule.id, p_no_stock: valeur,
+    })
+    if (error) {
+      setErreur(messageErreur(error))
+      setEnCours(null)
+      return
+    }
+
+    setSaisieStock((s) => { const suite = { ...s }; delete suite[vehicule.id]; return suite })
+    await charger()
+    setEnCours(null)
+  }
+
   const affiches = useMemo(() => {
     const terme = recherche.trim().toUpperCase()
     return vehicules.filter((v) => {
@@ -118,6 +142,7 @@ export function Inventaire() {
       if (saaqSeulement && !(v.requiert_inspection_saaq && !v.saaq_complete_le)) return false
       if (venduSeulement && !v.vente_etat) return false
       if (typeChoisi && v.type_vehicule !== typeChoisi) return false
+      if (sansStockSeulement && v.no_stock) return false
       if (!terme) return true
       return (
         v.no_stock?.toUpperCase().includes(terme) ||
@@ -125,7 +150,10 @@ export function Inventaire() {
         v.vehicule_titre?.toUpperCase().includes(terme)
       )
     })
-  }, [vehicules, recherche, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement, typeChoisi])
+  }, [
+    vehicules, recherche, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement, typeChoisi,
+    sansStockSeulement,
+  ])
 
   /**
    * Files nommées plutôt que filtres à reconstruire, sur le modèle des pages
@@ -135,7 +163,8 @@ export function Inventaire() {
     const parStatut = (nom: string) => vehicules.filter((v) => v.statut === nom).length
     const base: File[] = [
       { cle: 'tous', libelle: 'Tous', compte: vehicules.length,
-        actif: !statutChoisi && !critiquesSeulement && !saaqSeulement && !venduSeulement && !typeChoisi,
+        actif: !statutChoisi && !critiquesSeulement && !saaqSeulement && !venduSeulement && !typeChoisi
+          && !sansStockSeulement,
         aller: () => filtrer({}) },
       // Une réparation critique bloque la vente : c'est le seul rouge de l'écran.
       { cle: 'critiques', libelle: 'Alertes critiques',
@@ -155,6 +184,11 @@ export function Inventaire() {
       { cle: 'neuf', libelle: 'Neuf',
         compte: vehicules.filter((v) => v.type_vehicule === 'neuf').length,
         actif: typeChoisi === 'neuf', aller: () => filtrer({ type: 'neuf' }) },
+      // Jonathan a créé le véhicule sans connaître son numéro — c'est à
+      // Emily de l'attribuer en faisant le contrat (§ processus d'acquisition).
+      { cle: 'sans-stock', libelle: 'Sans numéro de stock',
+        compte: vehicules.filter((v) => !v.no_stock).length,
+        ton: 'attente', actif: sansStockSeulement, aller: () => filtrer({ sansStock: true }) },
     ]
     // Les statuts opérationnels que l'équipe suit au quotidien dans Airtable.
     const suivis = [A_VENIR, ATTENTE_RECEPTION, 'VÉHICULE REÇU', 'DISPONIBLE', 'WHOLESALE', 'DÉMO', 'COURTOISIE']
@@ -171,7 +205,10 @@ export function Inventaire() {
       })
     }
     return base
-  }, [vehicules, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement, typeChoisi, filtrer])
+  }, [
+    vehicules, statutChoisi, critiquesSeulement, saaqSeulement, venduSeulement, typeChoisi,
+    sansStockSeulement, filtrer,
+  ])
 
   /**
    * Moyennes suivies sur le tableau de bord Airtable.
@@ -203,7 +240,12 @@ export function Inventaire() {
 
       {etat?.creation && (
         <div className="bandeau-succes">
-          <strong>{etat.creation.noStock} a été créé.</strong>
+          <strong>
+            {etat.creation.noStock ? `${etat.creation.noStock} a été créé.` : 'Le véhicule a été créé.'}
+          </strong>
+          {!etat.creation.noStock && (
+            <p>Sans numéro de stock pour l’instant — à attribuer plus bas, ou par Emily en faisant le contrat.</p>
+          )}
           {etat.creation.documentsEnEchec.length > 0 ? (
             <p>
               Attention : le téléversement de{' '}
@@ -276,7 +318,7 @@ export function Inventaire() {
               <li key={v.id} className="vehicule">
                 <div className="vehicule-entete">
                   <Link to={`/vehicule/${v.id}`} className="no-stock lien-stock">
-                    {v.no_stock}
+                    {v.no_stock ?? 'Sans numéro'}
                   </Link>
                   <span className="badges-statut">
                     {v.type_vehicule === 'neuf' && <span className="statut statut-attente">Neuf</span>}
@@ -327,6 +369,29 @@ export function Inventaire() {
 
                 {v.alertes && (
                   <p className={`alerte ${v.nb_critiques > 0 ? 'critique' : ''}`}>{v.alertes}</p>
+                )}
+
+                {!v.no_stock && peutRecevoir && (
+                  <form
+                    className="formulaire-court"
+                    onSubmit={(e) => { e.preventDefault(); attribuerStock(v) }}
+                  >
+                    <label className="champ champ-inline">
+                      <span>Numéro de stock</span>
+                      <input
+                        value={saisieStock[v.id] ?? ''}
+                        onChange={(e) => setSaisieStock((s) => ({ ...s, [v.id]: e.target.value.toUpperCase() }))}
+                        placeholder="A0983"
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      className="bouton-secondaire"
+                      disabled={enCours === v.id || !(saisieStock[v.id] ?? '').trim()}
+                    >
+                      {enCours === v.id ? 'Attribution…' : 'Attribuer'}
+                    </button>
+                  </form>
                 )}
 
                 <div className="vehicule-actions">
