@@ -17,6 +17,7 @@ type Destinataire = {
   id: string; evenement_code: string; utilisateur_id: string | null
   courriel: string | null; actif: boolean
 }
+type ConfigLigne = { cle: string; valeur: string | null; notes: string | null }
 
 export function Reglages() {
   const { aLeDroit, utilisateur: moi } = useMoi()
@@ -27,6 +28,7 @@ export function Reglages() {
   const [exceptions, setExceptions] = useState<Exception[]>([])
   const [evenements, setEvenements] = useState<Evenement[]>([])
   const [destinataires, setDestinataires] = useState<Destinataire[]>([])
+  const [config, setConfig] = useState<ConfigLigne[]>([])
 
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -36,9 +38,10 @@ export function Reglages() {
   const gereUtilisateurs = aLeDroit('admin.utilisateurs')
   const gerePermissions = aLeDroit('admin.permissions')
   const gereNotifications = aLeDroit('admin.notifications')
+  const gereSignature = aLeDroit('parametres.signature')
 
   const charger = useCallback(async () => {
-    const [u, p, rp, ex, ev, de] = await Promise.all([
+    const [u, p, rp, ex, ev, de, cf] = await Promise.all([
       supabase.from('utilisateur').select('id, nom, email, role, actif, auth_user_id').order('nom'),
       supabase.from('permission').select('code, libelle, categorie, ordre').order('ordre'),
       supabase.from('role_permission').select('role, permission_code'),
@@ -46,6 +49,7 @@ export function Reglages() {
       supabase.from('notification_evenement').select('code, libelle, actif').order('code'),
       supabase.from('notification_destinataire')
         .select('id, evenement_code, utilisateur_id, courriel, actif'),
+      supabase.from('config').select('cle, valeur, notes'),
     ])
 
     if (u.error) setErreur(messageErreur(u.error))
@@ -56,6 +60,7 @@ export function Reglages() {
     setExceptions((ex.data ?? []) as Exception[])
     setEvenements((ev.data ?? []) as Evenement[])
     setDestinataires((de.data ?? []) as Destinataire[])
+    setConfig((cf.data ?? []) as ConfigLigne[])
     setChargement(false)
   }, [])
 
@@ -157,9 +162,34 @@ export function Reglages() {
     form.reset()
   }
 
+  // --- Programme Signature ---------------------------------------------------
+
+  const valeurConfig = (cle: string) => config.find((c) => c.cle === cle)?.valeur ?? null
+
+  async function sauverSignature(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const d = new FormData(e.currentTarget)
+    const margePct = String(d.get('marge') ?? '').trim()
+    const plancher = String(d.get('plancher') ?? '').trim()
+    const plafond = String(d.get('plafond') ?? '').trim()
+
+    if (plancher && plafond && Number(plancher) > Number(plafond)) {
+      setErreur('Le plancher ne peut pas dépasser le plafond.')
+      return
+    }
+
+    await executer('signature',
+      () => supabase.from('config').upsert([
+        { cle: 'signature_marge', valeur: margePct ? String(Number(margePct) / 100) : null },
+        { cle: 'signature_plancher', valeur: plancher || null },
+        { cle: 'signature_plafond', valeur: plafond || null },
+      ]),
+      'Paramètres du programme Signature enregistrés.')
+  }
+
   if (chargement) return <div className="page"><p className="note">Chargement…</p></div>
 
-  if (!gereUtilisateurs && !gerePermissions && !gereNotifications) {
+  if (!gereUtilisateurs && !gerePermissions && !gereNotifications && !gereSignature) {
     return (
       <div className="page">
         <p className="message-erreur">Vous n’avez pas accès aux réglages.</p>
@@ -388,6 +418,50 @@ export function Reglages() {
             <button type="submit" className="bouton-secondaire" disabled={action !== null}>
               Enregistrer l’exception
             </button>
+          </form>
+        </section>
+      )}
+
+      {/* --- Programme Signature --- */}
+      {gereSignature && (
+        <section className="bloc">
+          <h2>Programme Signature</h2>
+          <p className="note sans-marge">
+            Signature = travaux non exécutés × (1 + marge), ramené entre le plancher et le
+            plafond. Tant que le plancher ou le plafond est vide, le desking refuse de
+            calculer un prix — plutôt que d’en afficher un qu’on n’a pas validé.
+          </p>
+
+          <form className="grille espace-haut" onSubmit={sauverSignature}>
+            <label className="champ">
+              <span>Marge <em>obligatoire</em></span>
+              <input
+                name="marge" type="number" min={0} step="1" required
+                defaultValue={valeurConfig('signature_marge') ? String(Number(valeurConfig('signature_marge')) * 100) : ''}
+              />
+              <small className="note">En pourcentage — 35 pour 35 %.</small>
+            </label>
+            <label className="champ">
+              <span>Plancher ($)</span>
+              <input
+                name="plancher" type="number" min={0} step="1"
+                defaultValue={valeurConfig('signature_plancher') ?? ''}
+                placeholder="Vide = calcul bloqué"
+              />
+            </label>
+            <label className="champ">
+              <span>Plafond ($)</span>
+              <input
+                name="plafond" type="number" min={0} step="1"
+                defaultValue={valeurConfig('signature_plafond') ?? ''}
+                placeholder="Vide = calcul bloqué"
+              />
+            </label>
+            <div className="vehicule-actions">
+              <button type="submit" className="bouton-principal" disabled={action !== null}>
+                {action === 'signature' ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
           </form>
         </section>
       )}

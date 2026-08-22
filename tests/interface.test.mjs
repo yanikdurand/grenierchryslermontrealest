@@ -57,7 +57,8 @@ const PROFILS = {
              'vehicule.creer', 'vehicule.modifier', 'vehicule.recevoir', 'vehicule.voir',
              'vehicule.voir_couts', 'vehicule.voir_prix_achat', 'vehicule.voir_profit',
              'vente.enregistrer', 'vente.financement', 'vente.livrer', 'lead.saisir',
-             'travaux.demander', 'travaux.gerer', 'travaux.completer', 'inspection.garantie'],
+             'travaux.demander', 'travaux.gerer', 'travaux.completer', 'inspection.garantie',
+             'parametres.signature'],
     masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
   },
   directeur: {
@@ -71,7 +72,7 @@ const PROFILS = {
              'feuille.saisir', 'lead.voir', 'rapport.voir', 'saaq.completer',
              'inspection.saisir', 'inspection.approuver', 'alerte.resoudre', 'affichage.voir',
              'vente.enregistrer', 'vente.financement', 'lead.saisir',
-             'travaux.demander', 'travaux.gerer'],
+             'travaux.demander', 'travaux.gerer', 'parametres.signature'],
     masque: { prix_achat: 15500, profit: 6800, cout_base_engage: 1200, leads_total: 3 },
   },
   aviseur: {
@@ -181,6 +182,11 @@ async function scenario(navigateur, cle) {
       description: 'Réparer le miroir', complete: false, complete_le: null, complete_par: null },
   ] : []
   let messagesLigne = []
+  let configLignes = [
+    { cle: 'signature_marge', valeur: '0.35', notes: null },
+    { cle: 'signature_plancher', valeur: '1500', notes: null },
+    { cle: 'signature_plafond', valeur: '4500', notes: null },
+  ]
 
   // LARGEUR permet de rejouer le scénario sur un grand écran, là où le
   // centrage de la colonne se vérifie.
@@ -287,6 +293,17 @@ async function scenario(navigateur, cle) {
     }
     if (chemin === '/rest/v1/notification_evenement') {
       return route.fulfill(json([{ code: 'pret_inspecter', libelle: 'Véhicule prêt à inspecter', actif: true }]))
+    }
+    if (chemin === '/rest/v1/config') {
+      if (methode !== 'GET') {
+        const corps = JSON.parse(req.postData() || '[]')
+        appels.push({ fonction: 'config', methode, p: corps })
+        for (const ligne of corps) {
+          configLignes = [...configLignes.filter((c) => c.cle !== ligne.cle), ligne]
+        }
+        return route.fulfill(json(corps, 201))
+      }
+      return route.fulfill(json(configLignes))
     }
     if (chemin === '/rest/v1/notification_destinataire') {
       if (methode !== 'GET') {
@@ -1209,47 +1226,69 @@ async function scenario(navigateur, cle) {
   }
 
   // --- Réglages (étape 7) ---
-  const droitsAdmin = ['admin.utilisateurs', 'admin.permissions', 'admin.notifications']
+  const droitsAdmin = ['admin.utilisateurs', 'admin.permissions', 'admin.notifications', 'parametres.signature']
   const voitReglages = droitsAdmin.some((d) => profil.droits.includes(d))
   note(`${prefixe} — onglet Réglages ${voitReglages ? 'visible' : 'masqué'}`,
        ((await page.locator('nav a:has-text("Réglages")').count()) === 1) === voitReglages)
 
   if (voitReglages) {
     await page.click('nav a:has-text("Réglages")')
-    await page.waitForSelector('.tableau', { timeout: 15000 })
+    await page.waitForSelector('.bloc', { timeout: 15000 })
 
-    note(`${prefixe} — employés listés, inactif compris`,
-         (await page.locator('.tableau tbody tr').first().count()) === 1
-         && (await page.locator('.tableau tr.inactif').count()) === 1)
+    const gereUtilisateursTest = profil.droits.includes('admin.utilisateurs')
+    if (gereUtilisateursTest) {
+      note(`${prefixe} — employés listés, inactif compris`,
+           (await page.locator('.tableau tbody tr').first().count()) === 1
+           && (await page.locator('.tableau tr.inactif').count()) === 1)
 
-    note(`${prefixe} — employé sans compte de connexion signalé`,
-         (await page.locator('.message-avertissement').textContent())?.includes('Nouvelle recrue'))
+      note(`${prefixe} — employé sans compte de connexion signalé`,
+           (await page.locator('.message-avertissement').textContent())?.includes('Nouvelle recrue'))
 
-    // On ne doit pas pouvoir se retirer ses propres droits
-    const monRole = page.locator('.tableau tbody tr').filter({ hasText: 'Yanik Durand' })
-    note(`${prefixe} — son propre rôle est verrouillé`,
-         await monRole.locator('select').isDisabled())
-    note(`${prefixe} — sa propre désactivation est verrouillée`,
-         await monRole.locator('input[type=checkbox]').isDisabled())
+      // On ne doit pas pouvoir se retirer ses propres droits
+      const monRole = page.locator('.tableau tbody tr').filter({ hasText: 'Yanik Durand' })
+      note(`${prefixe} — son propre rôle est verrouillé`,
+           await monRole.locator('select').isDisabled())
+      note(`${prefixe} — sa propre désactivation est verrouillée`,
+           await monRole.locator('input[type=checkbox]').isDisabled())
 
-    // Changement de rôle d'un autre
-    const autre = page.locator('.tableau tbody tr').filter({ hasText: 'Nouvelle recrue' })
-    await autre.locator('select').selectOption('aviseur')
-    await page.waitForTimeout(900)
-    note(`${prefixe} — changement de rôle envoyé`,
-         appels.some((a) => a.fonction === 'utilisateur' && a.p.role === 'aviseur'))
+      // Changement de rôle d'un autre
+      const autre = page.locator('.tableau tbody tr').filter({ hasText: 'Nouvelle recrue' })
+      await autre.locator('select').selectOption('aviseur')
+      await page.waitForTimeout(900)
+      note(`${prefixe} — changement de rôle envoyé`,
+           appels.some((a) => a.fonction === 'utilisateur' && a.p.role === 'aviseur'))
+    }
 
-    // Grille des droits
-    note(`${prefixe} — grille des droits affichée`,
-         (await page.locator('.grille-droits').count()) === 1)
-    const caseVendeurProfit = page.locator('.grille-droits tbody tr')
-      .filter({ hasText: 'Voir le profit' }).locator('input[type=checkbox]').nth(1)
-    note(`${prefixe} — vendeur n'a pas « Voir le profit »`,
-         !(await caseVendeurProfit.isChecked()))
-    await caseVendeurProfit.check()
-    await page.waitForTimeout(900)
-    note(`${prefixe} — droit accordé au rôle`,
-         appels.some((a) => a.fonction === 'role_permission' && a.methode === 'POST'))
+    const gerePermissionsTest = profil.droits.includes('admin.permissions')
+    if (gerePermissionsTest) {
+      // Grille des droits
+      note(`${prefixe} — grille des droits affichée`,
+           (await page.locator('.grille-droits').count()) === 1)
+      const caseVendeurProfit = page.locator('.grille-droits tbody tr')
+        .filter({ hasText: 'Voir le profit' }).locator('input[type=checkbox]').nth(1)
+      note(`${prefixe} — vendeur n'a pas « Voir le profit »`,
+           !(await caseVendeurProfit.isChecked()))
+      await caseVendeurProfit.check()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — droit accordé au rôle`,
+           appels.some((a) => a.fonction === 'role_permission' && a.methode === 'POST'))
+    }
+
+    // Programme Signature : marge/plancher/plafond, jamais codés en dur
+    const voitSignature = profil.droits.includes('parametres.signature')
+    note(`${prefixe} — réglages Signature ${voitSignature ? 'affichés' : 'masqués'}`,
+         ((await page.locator('h2:has-text("Programme Signature")').count()) === 1) === voitSignature)
+
+    if (voitSignature) {
+      note(`${prefixe} — marge Signature préremplie à 35`,
+           (await page.locator('input[name=marge]').inputValue()) === '35')
+      await page.locator('input[name=plafond]').fill('5000')
+      await page.locator('form:has(input[name=marge]) button[type=submit]').click()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — paramètres Signature enregistrés`,
+           appels.some((a) => a.fonction === 'config'
+             && a.p.some((x) => x.cle === 'signature_plafond' && x.valeur === '5000')))
+    }
 
     await page.screenshot({ path: `apercu-reglages-${cle}.png`, fullPage: true })
   }

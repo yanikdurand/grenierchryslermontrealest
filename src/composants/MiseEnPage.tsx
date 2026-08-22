@@ -65,7 +65,7 @@ const GROUPES: Groupe[] = [
     entrees: [
       {
         vers: '/reglages', libelle: 'Réglages', icone: 'engrenage',
-        droits: ['admin.utilisateurs', 'admin.permissions', 'admin.notifications'],
+        droits: ['admin.utilisateurs', 'admin.permissions', 'admin.notifications', 'parametres.signature'],
       },
     ],
   },
