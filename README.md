@@ -87,6 +87,10 @@ docs/
 | Visites du jour (phone-up / walk-in) | fait |
 | Parcours et goulots | fait |
 | 8 — Tableaux de bord | fait |
+| Programme Signature (prix dynamique, desking) | fait |
+| Santé de la journée | fait |
+| Diagnostic prix et leads | fait |
+| Recherche d'opportunité par nom/téléphone dans les visites | fait |
 
 Prochaine étape : la passe UI/UX, avec les références de l'équipe. La fiche
 véhicule sur téléphone y sera reprise — elle fait 3683 px de haut, un champ

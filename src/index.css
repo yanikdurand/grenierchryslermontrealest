@@ -900,6 +900,18 @@ h1, h2, h3 {
   font-weight: 500;
 }
 
+/* Suggestion, pas avertissement : pas de teinte sémantique. */
+.bloc-discret {
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--rayon-petit);
+  background: var(--fond-creux);
+  border: 1px solid var(--trait);
+}
+
+.bloc-discret .liste-simple {
+  margin-top: 0.4rem;
+}
+
 /* ---------- Téléphone ---------- */
 
 @media (max-width: 640px) {

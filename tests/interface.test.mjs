@@ -383,7 +383,15 @@ async function scenario(navigateur, cle) {
         { id: 'j2', jalon: 'recu', atteint_le: '2026-08-01T09:00:00Z' },
       ]))
     }
-    if (chemin === '/rest/v1/crm_lead') return route.fulfill(json([]))
+    if (chemin === '/rest/v1/crm_lead') {
+      const filtreOr = new AdresseURL(req.url()).searchParams.get('or') ?? ''
+      const correspond = filtreOr.includes('Tremblay') || filtreOr.includes('5145551111')
+      return route.fulfill(json(correspond ? [
+        { id: 'lead-crm-1', lead_id_crm: 'CRM-9001', nom: 'Sophie Tremblay', telephone: '514-555-1111',
+          vehicule_texte: '2022 JEEP COMPASS', source: 'Web', statut_crm: 'Nouveau',
+          date_recu: '2026-08-20T14:00:00Z' },
+      ] : []))
+    }
     if (chemin === '/rest/v1/v_vente_app') return route.fulfill(json(ventes))
     if (chemin === '/rest/v1/v_visite_app') return route.fulfill(json(visites))
     if (chemin === '/rest/v1/v_alertes_ouvertes') {
@@ -455,7 +463,7 @@ async function scenario(navigateur, cle) {
           neuf_usage: corps.neuf_usage, chrys_conq: corps.chrys_conq, echange: corps.echange,
           vehicule_id: corps.vehicule_id, no_stock: corps.vehicule_id ? 'A1234' : null,
           vehicule: null, vendeur_id: corps.vendeur_id, vendeur: null,
-          saisi_par_direction: 'Direction', notes: corps.notes,
+          saisi_par_direction: 'Direction', lien_crm: corps.lien_crm ?? null, notes: corps.notes,
           cree_le: new Date().toISOString(),
         }, ...visites]
         return route.fulfill(json([], 201))
@@ -1347,6 +1355,26 @@ async function scenario(navigateur, cle) {
     await page.click('nav a:has-text("Visites")')
     await page.waitForSelector('.compteurs', { timeout: 15000 })
 
+    // Recherche d'opportunité : ce client a déjà un lead web dans le CRM.
+    if (profil.droits.includes('lead.voir')) {
+      await page.fill('input[name=client]', 'Sophie Tremblay')
+      await page.waitForTimeout(600)
+      note(`${prefixe} — correspondance CRM proposée (recherche d'opportunité)`,
+           (await page.locator('.bloc-discret li:has-text("Sophie Tremblay")').count()) === 1)
+
+      await page.locator('.bloc-discret button:has-text("Lier")').click()
+      note(`${prefixe} — le lead CRM est rattaché`,
+           (await page.locator('.bandeau-succes:has-text("Sophie Tremblay")').count()) === 1)
+
+      await page.locator('button:has-text("Ajouter la visite")').click()
+      await page.waitForTimeout(1200)
+      note(`${prefixe} — la visite liée porte le lien CRM`,
+           appels.some((a) => a.fonction === 'lead_showroom'
+             && a.p.client === 'Sophie Tremblay' && a.p.lien_crm === 'CRM-9001'))
+      note(`${prefixe} — le lien CRM est visible dans la journée`,
+           (await page.locator('td:has-text("Lié")').count()) === 1)
+    }
+
     await page.fill('input[name=client]', 'Client Walkin')
     await page.fill('input[name=telephone]', '514-555-1111')
     await page.locator('button:has-text("Ajouter la visite")').click()
@@ -1355,8 +1383,11 @@ async function scenario(navigateur, cle) {
          appels.some((a) => a.fonction === 'lead_showroom' && a.p.client === 'Client Walkin'))
     note(`${prefixe} — la direction est tracée comme saisisseur`,
          appels.some((a) => a.fonction === 'lead_showroom' && a.p.direction_id))
+    // Deux visites Walk-in si la recherche d'opportunité a aussi soumis
+    // Sophie Tremblay plus haut (source par défaut inchangée).
+    const walkInAttendus = profil.droits.includes('lead.voir') ? '2' : '1'
     note(`${prefixe} — le compteur Walk-in a suivi`,
-         (await page.locator('.compteur:has-text("Walk-in") .chiffre').textContent()) === '1')
+         (await page.locator('.compteur:has-text("Walk-in") .chiffre').textContent()) === walkInAttendus)
     note(`${prefixe} — le curseur revient au nom du client`,
          await page.locator('input[name=client]').evaluate((el) => el === document.activeElement))
 

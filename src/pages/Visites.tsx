@@ -26,8 +26,24 @@ type Visite = {
   vendeur_id: string | null
   vendeur: string | null
   saisi_par_direction: string | null
+  lien_crm: string | null
   notes: string | null
   cree_le: string
+}
+
+type Opportunite = {
+  id: string
+  lead_id_crm: string | null
+  nom: string | null
+  telephone: string | null
+  vehicule_texte: string | null
+  source: string | null
+  statut_crm: string | null
+  date_recu: string | null
+}
+
+function chiffresSeuls(v: string): string {
+  return v.replace(/\D/g, '')
 }
 
 function aujourdhui(): string {
@@ -57,6 +73,35 @@ export function Visites() {
   const [source, setSource] = useState('Walkin')
   const [vendeur, setVendeur] = useState('')
   const champClient = useRef<HTMLInputElement>(null)
+
+  // Recherche d'opportunité : ce client a peut-être déjà un lead web/SMS/
+  // Facebook que SM360 a reçu avant qu'il se présente en personne.
+  const [nomSaisi, setNomSaisi] = useState('')
+  const [telephoneSaisi, setTelephoneSaisi] = useState('')
+  const [correspondances, setCorrespondances] = useState<Opportunite[]>([])
+  const [opportuniteLiee, setOpportuniteLiee] = useState<Opportunite | null>(null)
+  const peutVoirLeads = aLeDroit('lead.voir')
+
+  useEffect(() => {
+    if (!peutVoirLeads) return
+    const nom = nomSaisi.trim()
+    const tel = chiffresSeuls(telephoneSaisi)
+    if (nom.length < 3 && tel.length < 7) { setCorrespondances([]); return }
+
+    const minuterie = setTimeout(async () => {
+      const filtres: string[] = []
+      if (nom.length >= 3) filtres.push(`nom.ilike.%${nom}%`)
+      if (tel.length >= 7) filtres.push(`telephone.ilike.%${tel}%`)
+      const { data } = await supabase.from('crm_lead')
+        .select('id, lead_id_crm, nom, telephone, vehicule_texte, source, statut_crm, date_recu')
+        .or(filtres.join(','))
+        .order('date_recu', { ascending: false })
+        .limit(5)
+      setCorrespondances((data ?? []) as unknown as Opportunite[])
+    }, 350)
+
+    return () => clearTimeout(minuterie)
+  }, [nomSaisi, telephoneSaisi, peutVoirLeads])
 
   const peutSaisir = aLeDroit('lead.saisir')
 
@@ -103,12 +148,17 @@ export function Visites() {
       echange: String(d.get('echange') ?? '').trim() || null,
       statut: String(d.get('statut') ?? '') || 'Nouveau',
       notes: String(d.get('notes') ?? '').trim() || null,
+      lien_crm: opportuniteLiee ? (opportuniteLiee.lead_id_crm ?? opportuniteLiee.id) : null,
       cree_par: utilisateur?.id ?? null,
     })
 
     if (error) { setErreur(messageErreur(error)); setEnvoi(false); return }
 
     form.reset()
+    setNomSaisi('')
+    setTelephoneSaisi('')
+    setCorrespondances([])
+    setOpportuniteLiee(null)
     await charger()
     setSucces(`${client} enregistré.`)
     setEnvoi(false)
@@ -191,12 +241,67 @@ export function Visites() {
             <div className="grille">
               <label className="champ">
                 <span>Client <em>obligatoire</em></span>
-                <input name="client" ref={champClient} required autoFocus />
+                <input
+                  name="client" ref={champClient} required autoFocus
+                  value={nomSaisi}
+                  onChange={(e) => { setNomSaisi(e.target.value); setOpportuniteLiee(null) }}
+                />
               </label>
               <label className="champ">
                 <span>Téléphone</span>
-                <input name="telephone" inputMode="tel" />
+                <input
+                  name="telephone" inputMode="tel"
+                  value={telephoneSaisi}
+                  onChange={(e) => { setTelephoneSaisi(e.target.value); setOpportuniteLiee(null) }}
+                />
               </label>
+            </div>
+
+            {peutVoirLeads && !opportuniteLiee && correspondances.length > 0 && (
+              <div className="bloc-discret espace-haut">
+                <p className="note sans-marge">
+                  Correspondance{correspondances.length > 1 ? 's' : ''} possible
+                  {correspondances.length > 1 ? 's' : ''} dans le CRM — SM360 l’a peut-être
+                  déjà reçu avant qu’il se présente :
+                </p>
+                <ul className="liste-simple">
+                  {correspondances.map((o) => (
+                    <li key={o.id}>
+                      <button
+                        type="button" className="bouton-discret"
+                        onClick={() => {
+                          setOpportuniteLiee(o)
+                          if (o.nom) setNomSaisi(o.nom)
+                          if (o.telephone && !telephoneSaisi) setTelephoneSaisi(o.telephone)
+                        }}
+                      >
+                        Lier
+                      </button>
+                      {' '}
+                      <strong>{o.nom ?? 'Sans nom'}</strong>
+                      {o.telephone && ` · ${o.telephone}`}
+                      {o.vehicule_texte && ` · ${o.vehicule_texte}`}
+                      {o.source && ` · ${o.source}`}
+                      {o.statut_crm && ` · ${o.statut_crm}`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {opportuniteLiee && (
+              <p className="bandeau-succes espace-haut">
+                Rattaché au lead CRM de {opportuniteLiee.nom ?? 'ce client'}
+                {' '}
+                <button
+                  type="button" className="bouton-discret"
+                  onClick={() => setOpportuniteLiee(null)}
+                >
+                  Retirer
+                </button>
+              </p>
+            )}
+
+            <div className="grille espace-haut">
               <label className="champ">
                 <span>Véhicule d’intérêt</span>
                 <select name="vehicule" defaultValue="">
@@ -259,7 +364,7 @@ export function Visites() {
               <thead>
                 <tr>
                   <th>Client</th><th>Téléphone</th><th>Source</th><th>Vendeur</th>
-                  <th>Véhicule</th><th>Statut</th>
+                  <th>Véhicule</th><th>Statut</th><th>CRM</th>
                 </tr>
               </thead>
               <tbody>
@@ -277,6 +382,7 @@ export function Visites() {
                       ) : texte(v.vehicule)}
                     </td>
                     <td>{texte(v.statut)}</td>
+                    <td className="discret">{v.lien_crm ? 'Lié' : '—'}</td>
                   </tr>
                 ))}
               </tbody>
