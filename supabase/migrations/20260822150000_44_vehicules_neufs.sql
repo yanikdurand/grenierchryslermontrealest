@@ -24,9 +24,13 @@ comment on column vehicule.type_vehicule is
 
 create index idx_vehicule_type on vehicule(type_vehicule);
 
--- 2. Le PDI est une troisième origine de demande de travaux, à côté de la
---    demande manuelle du concessionnaire et du bon de préparation de livraison.
---    C'est la même feuille physique aujourd'hui : même table demain.
+-- 2. Le déclencheur de la demande de travaux.
+--
+-- ⚠️ CORRIGÉ PAR LA MIGRATION 45 : la valeur 'pdi' posée ici était une erreur
+-- de modélisation. Le PDI n'est pas une origine, c'est un CONTENU (retirer les
+-- plastiques, poser les barrures de roues, sortir du mode transport). La 45
+-- remplace 'pdi' par 'reception_neuf' et déplace le contenu dans un modèle
+-- réutilisable que le service gère lui-même.
 alter table demande_travaux
   add column origine text not null default 'manuelle'
     check (origine in ('manuelle', 'livraison', 'pdi'));
