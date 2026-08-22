@@ -18,10 +18,13 @@ const VALEUR_AUTRE = '__autre__'
 
 type Televersement = { fichier: File; type: TypeDocument }
 
-/** Un VIN ne contient jamais I, O ni Q — même règle que `creer_vehicule`. */
-function vinInvalide(vin: string): string | null {
+/**
+ * Un VIN ne contient jamais I, O ni Q — même règle que `creer_vehicule`.
+ * Optionnel pour un neuf : DealerConnect ne le donne qu'à la construction.
+ */
+function vinInvalide(vin: string, optionnel = false): string | null {
   const propre = vin.trim().toUpperCase()
-  if (propre.length === 0) return 'Le VIN est obligatoire.'
+  if (propre.length === 0) return optionnel ? null : 'Le VIN est obligatoire.'
   if (propre.length !== LONGUEUR_VIN) {
     return `Le VIN doit compter ${LONGUEUR_VIN} caractères (saisi : ${propre.length}).`
   }
@@ -242,7 +245,7 @@ export function Acquisition() {
 
   const pretAEnvoyer = useMemo(() => {
     if (!marqueEffective || !modeleEffectif) return false
-    if (vinInvalide(vin)) return false
+    if (vinInvalide(vin, estNeuf)) return false
     if (!annee) return false
     if (!justificatif) return false
     // Prix d'achat, Carfax et fournisseur n'existent pas pour un véhicule
@@ -310,7 +313,7 @@ export function Acquisition() {
     setErreur(null)
     setAvertissement(null)
 
-    const probleme = vinInvalide(vin)
+    const probleme = vinInvalide(vin, estNeuf)
     if (probleme) {
       setErreur(probleme)
       return
@@ -329,7 +332,7 @@ export function Acquisition() {
     //    le contrat si Jonathan ne le connaît pas déjà.
     const { data: vehiculeId, error } = await supabase.rpc('creer_vehicule', {
       p_no_stock: noStock.trim() || null,
-      p_vin: vin.trim().toUpperCase(),
+      p_vin: vin.trim() ? vin.trim().toUpperCase() : null,
       p_marque: marqueEffective,
       p_modele: modeleEffectif,
       p_annee: Number(annee),
@@ -443,7 +446,8 @@ export function Acquisition() {
 
             <label className="champ">
               <span>
-                VIN <em>obligatoire — 17 caractères</em>
+                VIN {estNeuf ? <em>optionnel — pas encore attribué au moment de la commande</em>
+                             : <em>obligatoire — 17 caractères</em>}
                 <Info texte="Le décodage se lance seul dès que le VIN est complet et valide : marque, modèle, année et version sont proposés à partir de là — à vérifier avant d'envoyer." />
               </span>
               <input
@@ -451,11 +455,11 @@ export function Acquisition() {
                 value={vin}
                 onChange={(e) => { setVin(e.target.value.toUpperCase()); setDecodage('inactif') }}
                 maxLength={LONGUEUR_VIN}
-                required
+                required={!estNeuf}
                 spellCheck={false}
               />
-              {vin.length > 0 && vinInvalide(vin) && (
-                <small className="indice-erreur">{vinInvalide(vin)}</small>
+              {vin.length > 0 && vinInvalide(vin, estNeuf) && (
+                <small className="indice-erreur">{vinInvalide(vin, estNeuf)}</small>
               )}
               {vinExistant && (
                 <small className="indice-avertissement">
