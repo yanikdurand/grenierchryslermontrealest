@@ -386,6 +386,12 @@ async function scenario(navigateur, cle) {
     if (chemin === '/rest/v1/crm_lead') return route.fulfill(json([]))
     if (chemin === '/rest/v1/v_vente_app') return route.fulfill(json(ventes))
     if (chemin === '/rest/v1/v_visite_app') return route.fulfill(json(visites))
+    if (chemin === '/rest/v1/v_alertes_ouvertes') {
+      return route.fulfill(json([
+        { id: 'al1', no_stock: 'A1234', vehicule: '2021 HONDA ACCORD', alerte: 'Inspection SAAQ requise',
+          gravite: 'critique', jours_ouverte: 5, vehicule_id: 'veh-1' },
+      ]))
+    }
     if (chemin === '/rest/v1/v_kpi_stock_app') {
       return route.fulfill(json({ vehicules_en_stock: 110, vieillissants: 18,
         age_moyen: 64, age_median: 52, non_affiches: 9, sans_vin: 3,
@@ -1252,6 +1258,25 @@ async function scenario(navigateur, cle) {
          (await page.locator('a.lien-stock[href="/vehicule/veh-1"]').count()) > 0)
 
     await page.screenshot({ path: `apercu-tableaux-${cle}.png`, fullPage: true })
+  }
+
+  // --- Santé de la journée (brief §8.3) ---
+  const voitSante = profil.droits.includes('rapport.voir')
+  note(`${prefixe} — onglet Santé de la journée ${voitSante ? 'visible' : 'masqué'}`,
+       ((await page.locator('nav a:has-text("Santé de la journée")').count()) === 1) === voitSante)
+
+  if (voitSante) {
+    await page.click('nav a:has-text("Santé de la journée")')
+    await page.waitForSelector('.compteurs', { timeout: 15000 })
+
+    note(`${prefixe} — compteurs de la journée affichés`,
+         (await page.locator('.compteur:has-text("Walk-in")').count()) === 1)
+    note(`${prefixe} — l'alerte critique ouvre sa fiche (§3.2)`,
+         (await page.locator('a.lien-stock[href="/vehicule/veh-1"]').count()) > 0)
+    note(`${prefixe} — chaque section renvoie vers l'écran complet`,
+         (await page.locator('a:has-text("Voir tous les dossiers")').count()) === 1)
+
+    await page.screenshot({ path: `apercu-sante-${cle}.png`, fullPage: true })
   }
 
   // --- Parcours : où les véhicules bloquent ---
