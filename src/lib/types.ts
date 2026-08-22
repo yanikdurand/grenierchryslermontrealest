@@ -186,6 +186,8 @@ export type FileService = {
   saaq_rdv_le: string | null
   saaq_complete_le: string | null
   jours_inventaire: number | null
+  /** Demandes de vérification garantie du directeur, sans réponse de l'aviseur. */
+  nb_demandes_garantie_ouvertes: number
 }
 
 export type InspectionStatut = {
@@ -230,6 +232,19 @@ export type CodeReparation = {
   id: number
   code: string
   description: string | null
+}
+
+export type TypeMessageLigne = 'note' | 'demande_verification_garantie'
+
+export type MessageLigneInspection = {
+  id: string
+  inspection_ligne_id: string
+  type: TypeMessageLigne
+  contenu: string
+  cree_le: string
+  auteur_nom: string | null
+  resolu_le: string | null
+  resolu_par_nom: string | null
 }
 
 export type ChangementDecision = {

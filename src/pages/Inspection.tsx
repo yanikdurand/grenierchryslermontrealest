@@ -7,7 +7,7 @@ import { useMoi } from '../auth/MoiContexte'
 import { argent, date, dateCourte, decision as libelleDecision, nombre, texte } from '../lib/format'
 import type {
   ChangementDecision, CodeReparation, Decision, InspectionStatut,
-  LigneInspection, VehiculeApp,
+  LigneInspection, MessageLigneInspection, VehiculeApp,
 } from '../lib/types'
 
 /**
@@ -31,6 +31,8 @@ export function Inspection() {
   const [lignes, setLignes] = useState<LigneInspection[]>([])
   const [codes, setCodes] = useState<CodeReparation[]>([])
   const [historique, setHistorique] = useState<ChangementDecision[]>([])
+  const [messages, setMessages] = useState<MessageLigneInspection[]>([])
+  const [demandeGarantie, setDemandeGarantie] = useState<Record<string, boolean>>({})
 
   const [chargement, setChargement] = useState(true)
   const [erreur, setErreur] = useState<string | null>(null)
@@ -78,18 +80,27 @@ export function Inspection() {
       setLignes(listeLignes)
 
       if (listeLignes.length > 0) {
-        const { data: h } = await supabase
-          .from('decision_historique')
-          .select('id, inspection_ligne_id, decision_avant, decision_apres, change_le, motif')
-          .in('inspection_ligne_id', listeLignes.map((x) => x.id))
-          .order('change_le', { ascending: false })
+        const [{ data: h }, { data: m }] = await Promise.all([
+          supabase
+            .from('decision_historique')
+            .select('id, inspection_ligne_id, decision_avant, decision_apres, change_le, motif')
+            .in('inspection_ligne_id', listeLignes.map((x) => x.id))
+            .order('change_le', { ascending: false }),
+          supabase
+            .from('v_inspection_ligne_message')
+            .select('id, inspection_ligne_id, type, contenu, cree_le, auteur_nom, resolu_le, resolu_par_nom')
+            .in('inspection_ligne_id', listeLignes.map((x) => x.id)),
+        ])
         setHistorique((h ?? []) as ChangementDecision[])
+        setMessages((m ?? []) as MessageLigneInspection[])
       } else {
         setHistorique([])
+        setMessages([])
       }
     } else {
       setLignes([])
       setHistorique([])
+      setMessages([])
     }
 
     setChargement(false)
@@ -192,6 +203,34 @@ export function Inspection() {
       .from('inspection_ligne').update({ garantie_retour_le: new Date().toISOString() }).eq('id', ligne.id)
     if (error) setErreur(messageErreur(error))
     else { await charger(); setSucces('Retour du véhicule enregistré. La réparation est marquée faite.') }
+    setAction(null)
+  }
+
+  /**
+   * Un seul fil par ligne : le directeur peut y ouvrir une demande de
+   * vérification (elle apparaît dans la file du service tant qu'elle n'a
+   * pas de réponse), l'aviseur y répond — sa réponse résout la demande
+   * (trigger, jamais un clic séparé).
+   */
+  async function envoyerMessage(ligne: LigneInspection, e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    const contenu = String(new FormData(form).get('contenu') ?? '').trim()
+    if (!contenu) return
+
+    const demande = peutApprouver && (demandeGarantie[ligne.id] ?? false)
+    setAction(`message-${ligne.id}`); setErreur(null); setSucces(null)
+    const { error } = await supabase.from('inspection_ligne_message').insert({
+      inspection_ligne_id: ligne.id,
+      contenu,
+      type: demande ? 'demande_verification_garantie' : 'note',
+    })
+    if (error) setErreur(messageErreur(error))
+    else {
+      form.reset()
+      setDemandeGarantie((d) => ({ ...d, [ligne.id]: false }))
+      await charger()
+    }
     setAction(null)
   }
 
@@ -462,6 +501,58 @@ export function Inspection() {
                           <span>Réparation faite</span>
                         </label>
                       )}
+
+                      {(() => {
+                        const fil = messages.filter((m) => m.inspection_ligne_id === l.id)
+                        if (fil.length === 0 && !peutApprouver && !peutGarantie) return null
+                        return (
+                          <div className="discussion-ligne">
+                            {fil.length > 0 && (
+                              <ul className="liste-simple">
+                                {fil.map((m) => (
+                                  <li key={m.id}>
+                                    {m.type === 'demande_verification_garantie' && (
+                                      <span className={`statut ${m.resolu_le ? 'statut-disponible' : 'statut-attente'}`}>
+                                        {m.resolu_le ? 'Vérification répondue' : 'Vérification demandée'}
+                                      </span>
+                                    )}
+                                    {' '}<strong>{texte(m.auteur_nom)}</strong> — {m.contenu}
+                                    <span className="note"> ({dateCourte(m.cree_le)})</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+
+                            {(peutApprouver || peutGarantie) && (
+                              <form className="formulaire-court" onSubmit={(e) => envoyerMessage(l, e)}>
+                                <label className="champ">
+                                  <span>Message</span>
+                                  <input
+                                    name="contenu"
+                                    placeholder={peutApprouver
+                                      ? 'Peux-tu revérifier la couverture ?'
+                                      : 'Vérifié — hors garantie, la pièce a été remplacée…'}
+                                  />
+                                </label>
+                                {peutApprouver && (
+                                  <label className="case">
+                                    <input
+                                      type="checkbox"
+                                      checked={demandeGarantie[l.id] ?? false}
+                                      onChange={(e) =>
+                                        setDemandeGarantie((d) => ({ ...d, [l.id]: e.target.checked }))}
+                                    />
+                                    <span>Demander une vérification garantie</span>
+                                  </label>
+                                )}
+                                <button type="submit" className="bouton-discret" disabled={action !== null}>
+                                  {action === `message-${l.id}` ? 'Envoi…' : 'Envoyer'}
+                                </button>
+                              </form>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </li>
                   )
                 })}

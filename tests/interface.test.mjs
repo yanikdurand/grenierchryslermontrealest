@@ -180,6 +180,7 @@ async function scenario(navigateur, cle) {
     { id: 'dtl-2', demande_id: 'dt-1', no_ligne: 2, categorie: 'esthetique',
       description: 'Réparer le miroir', complete: false, complete_le: null, complete_par: null },
   ] : []
+  let messagesLigne = []
 
   // LARGEUR permet de rejouer le scénario sur un grand écran, là où le
   // centrage de la colonne se vérifie.
@@ -421,6 +422,35 @@ async function scenario(navigateur, cle) {
     }
     if (chemin === '/rest/v1/code_reparation') return route.fulfill(json(CODES))
     if (chemin === '/rest/v1/decision_historique') return route.fulfill(json([]))
+    if (chemin === '/rest/v1/v_inspection_ligne_message') return route.fulfill(json(messagesLigne))
+    if (chemin === '/rest/v1/inspection_ligne_message') {
+      if (methode === 'POST') {
+        const corps = JSON.parse(req.postData() || '{}')
+        appels.push({ fonction: 'inspection_ligne_message', p: corps })
+        const type = corps.type ?? 'note'
+        // La réponse de l'aviseur résout la demande ouverte — reproduit ici
+        // ce que fait le trigger fn_resoudre_demande_garantie côté serveur.
+        if (type === 'note') {
+          messagesLigne = messagesLigne.map((m) => (
+            m.inspection_ligne_id === corps.inspection_ligne_id
+            && m.type === 'demande_verification_garantie' && !m.resolu_le
+              ? { ...m, resolu_le: new Date().toISOString(), resolu_par_nom: profil.utilisateur.nom }
+              : m
+          ))
+        }
+        messagesLigne = [...messagesLigne, {
+          id: `msg-${messagesLigne.length + 1}`,
+          inspection_ligne_id: corps.inspection_ligne_id,
+          type,
+          contenu: corps.contenu,
+          cree_le: new Date().toISOString(),
+          auteur_nom: profil.utilisateur.nom,
+          resolu_le: null,
+          resolu_par_nom: null,
+        }]
+        return route.fulfill(json({}, 201))
+      }
+    }
     if (chemin === '/rest/v1/inspection_ligne') {
       if (methode === 'PATCH') {
         const corps = JSON.parse(req.postData() || '{}')
@@ -932,6 +962,30 @@ async function scenario(navigateur, cle) {
              && Object.keys(a.p).some((k) => k.endsWith('_par'))))
       note(`${prefixe} — total « De base » suit la décision`,
            (await page.locator('.page').textContent()).includes('800'))
+    }
+
+    // Discussion garantie (Q1) : le directeur demande, l'aviseur répond — la
+    // réponse résout la demande, jamais une case à cocher séparée.
+    if (peutApprouver) {
+      const premiereLigne = page.locator('.ligne-inspection').first()
+      const formMessage = premiereLigne.locator('form.formulaire-court')
+      await formMessage.locator('input[name=contenu]').fill('Peux-tu revérifier la couverture ?')
+      await formMessage.locator('label.case input').check()
+      await formMessage.locator('button:has-text("Envoyer")').click()
+      await page.waitForTimeout(900)
+      note(`${prefixe} — demande de vérification garantie envoyée`,
+           appels.some((a) => a.fonction === 'inspection_ligne_message'
+             && a.p.type === 'demande_verification_garantie'))
+      note(`${prefixe} — la demande apparaît dans le fil de la ligne`,
+           (await premiereLigne.locator('.discussion-ligne').textContent())?.includes('Vérification demandée'))
+
+      if (peutGarantie) {
+        await formMessage.locator('input[name=contenu]').fill('Vérifié — hors garantie.')
+        await formMessage.locator('button:has-text("Envoyer")').click()
+        await page.waitForTimeout(900)
+        note(`${prefixe} — la réponse de l'aviseur résout la demande`,
+             (await premiereLigne.locator('.discussion-ligne').textContent())?.includes('Vérification répondue'))
+      }
     }
 
     // Saisie de lignes : réservée à `inspection.saisir`

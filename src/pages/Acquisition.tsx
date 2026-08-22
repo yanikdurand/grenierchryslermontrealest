@@ -255,7 +255,7 @@ export function Acquisition() {
     if (saaqRequisPourFormulaire && requiertSaaq === '') return false
     return true
   }, [
-    noStock, marqueEffective, modeleEffectif, vin, annee, estNeuf, prixAchat, lienCarfax,
+    marqueEffective, modeleEffectif, vin, annee, estNeuf, prixAchat, lienCarfax,
     fournisseur, fournisseurAutre, justificatif, saaqRequisPourFormulaire, requiertSaaq,
   ])
 

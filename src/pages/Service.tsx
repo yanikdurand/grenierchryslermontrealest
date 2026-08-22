@@ -136,6 +136,13 @@ export function Service() {
                 </p>
               )}
 
+              {f.nb_demandes_garantie_ouvertes > 0 && (
+                <p className="note-alerte">
+                  {f.nb_demandes_garantie_ouvertes} vérification{f.nb_demandes_garantie_ouvertes > 1 ? 's' : ''}{' '}
+                  de garantie demandée{f.nb_demandes_garantie_ouvertes > 1 ? 's' : ''} par la direction, sans réponse.
+                </p>
+              )}
+
               <div className="vehicule-actions">
                 <Link to={`/vehicule/${f.vehicule_id}/inspection`} className="bouton-secondaire">
                   Ouvrir l’inspection
